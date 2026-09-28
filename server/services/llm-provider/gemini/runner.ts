@@ -4,8 +4,15 @@ import { usageFromGemini } from "./usage";
 import { extractInfo, type LLMResult } from "../../../llm-runner";
 import { GEMINI_GROUNDED_PROMPT_METER } from "@shared/ai-billing";
 import { geminiOutputText } from "./output";
+import { fakeAiSleep, fakeVisibilityText, isFakeAiEnabled, maybeThrowFakeAiError } from "../../fake-ai";
 
 export async function runGemini(prompt: string, brandName: string, competitors: string[], companyName?: string | null, systemPrompt?: string | null, usage?: AiUsageContext): Promise<LLMResult> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("gemini visibility scan");
+    const text = fakeVisibilityText(prompt, brandName, competitors, "gemini");
+    return { modelId: "gemini", ...extractInfo(text, brandName, competitors, companyName) };
+  }
   const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const response = await executeAiCall(
     usage,

@@ -10,6 +10,14 @@ import { usageFromOpenAI } from "./services/llm-provider/openai/usage";
 import { usageFromGemini } from "./services/llm-provider/gemini/usage";
 import { isAiUsageCapExceededError } from "./services/ai-usage/cap";
 import { GEMINI_GROUNDED_PROMPT_METER } from "@shared/ai-billing";
+import {
+  fakeAiSleep,
+  fakeDiscoveredCompetitors,
+  fakeVolumeEstimates,
+  fakeWeaknessReport,
+  isFakeAiEnabled,
+  maybeThrowFakeAiError,
+} from "./services/fake-ai";
 
 const VALID_PROMPT_TYPES = ["awareness", "consideration", "commercial"];
 const BATCH_SIZE = 5;
@@ -27,6 +35,22 @@ export async function estimateSearchVolumes(
 
     const region = brand.territory === "regional" && brand.location ? brand.location : "global";
     const category = brand.category || "general";
+
+    if (isFakeAiEnabled()) {
+      const fakes = fakeVolumeEstimates(`volumes:${brandId}`, needsEstimate.length);
+      let updated = 0;
+      for (let i = 0; i < needsEstimate.length; i++) {
+        const est = fakes[i];
+        await storage.updateUserQuestion(needsEstimate[i].id, {
+          searchVolume: est.volume_label,
+          searchVolumeMin: est.volume_min,
+          searchVolumeMax: est.volume_max,
+        });
+        updated++;
+      }
+      console.log(`Search volume estimation (FAKE_AI): updated ${updated}/${needsEstimate.length} questions for brand ${brandId}`);
+      return;
+    }
 
     const OpenAI = (await import("openai")).default;
     const client = new OpenAI({ apiKey: process.env.OPENAI_DIRECT_KEY });
@@ -143,12 +167,18 @@ async function extractDiscoveredCompetitors(
     const brandNameLower = brandName.toLowerCase().trim();
     const domainBase = brand.domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('.')[0].toLowerCase();
 
-    const combinedText = responses.join("\n---\n").slice(0, 15000);
+    let extracted: Array<{ name: string; domain?: string }>;
+    if (isFakeAiEnabled()) {
+      await fakeAiSleep();
+      maybeThrowFakeAiError("discovered competitors");
+      extracted = fakeDiscoveredCompetitors(brandName);
+    } else {
+      const combinedText = responses.join("\n---\n").slice(0, 15000);
 
-    const { GoogleGenAI } = await import("@google/genai");
-    const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+      const { GoogleGenAI } = await import("@google/genai");
+      const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-    const prompt = `Analyze the following AI-generated responses about "${brandName}" and extract ALL brand names, company names, product names, and tool names mentioned as alternatives, competitors, or related solutions.
+      const prompt = `Analyze the following AI-generated responses about "${brandName}" and extract ALL brand names, company names, product names, and tool names mentioned as alternatives, competitors, or related solutions.
 
 For each entity found, provide:
 - name: The brand/company/product name (proper casing)
@@ -167,26 +197,26 @@ If no competitors found, return: []
 Responses to analyze:
 ${combinedText}`;
 
-    const result = await executeAiCall(
-      { userId: brand.userId, brandId, feature: "competitor_research", source },
-      "gemini",
-      "gemini-2.5-flash",
-      () => genai.models.generateContent({ model: "gemini-2.5-flash", contents: prompt }),
-      usageFromGemini,
-    );
+      const result = await executeAiCall(
+        { userId: brand.userId, brandId, feature: "competitor_research", source },
+        "gemini",
+        "gemini-2.5-flash",
+        () => genai.models.generateContent({ model: "gemini-2.5-flash", contents: prompt }),
+        usageFromGemini,
+      );
 
-    const text = result.text || "";
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return;
+      const text = result.text || "";
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return;
 
-    let extracted: Array<{ name: string; domain?: string }>;
-    try {
-      extracted = JSON.parse(jsonMatch[0]);
-    } catch {
-      return;
+      try {
+        extracted = JSON.parse(jsonMatch[0]);
+      } catch {
+        return;
+      }
+
+      if (!Array.isArray(extracted) || extracted.length === 0) return;
     }
-
-    if (!Array.isArray(extracted) || extracted.length === 0) return;
 
     const filtered = extracted.filter(e => {
       if (!e.name || typeof e.name !== 'string') return false;
@@ -586,6 +616,14 @@ export async function refreshWeaknessData(brandId: number, brand: Brand): Promis
       }
 
       console.log(`[WeaknessRefresh] Researching weaknesses for "${target.name}" (brand ${brandId})`);
+
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError(`weakness refresh ${target.name}`);
+        await storage.upsertAiCache(brandId, "competitor_weakness", cacheKey, fakeWeaknessReport(target.name));
+        console.log(`[WeaknessRefresh] Cached FAKE_AI weakness data for "${target.name}" (brand ${brandId})`);
+        continue;
+      }
 
       const { GoogleGenAI } = await import("@google/genai");
       const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });

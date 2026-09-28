@@ -4,6 +4,7 @@ import { executeAiCall, type AiUsageContext } from "./services/ai-usage";
 import { usageFromGemini } from "./services/llm-provider/gemini/usage";
 import { isAiUsageCapExceededError } from "./services/ai-usage/cap";
 import { GEMINI_GROUNDED_PROMPT_METER } from "@shared/ai-billing";
+import { fakeAiSleep, fakeAuditCheck, isFakeAiEnabled, maybeThrowFakeAiError } from "./services/fake-ai";
 
 export interface AuditCheckDetail {
   name: string;
@@ -451,6 +452,12 @@ async function assessBatch(
     ? `\n\nIMPORTANT: This site appears to be a Single Page Application${spaInfo.framework ? ` (${spaInfo.framework})` : ""}. SPAs render content via JavaScript, so HTML source inspection may show minimal content. Consider this when assessing.`
     : "";
 
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("readability batch audit");
+    return checks.map((check) => fakeAuditCheck(check.name, check.id, domain));
+  }
+
   const fullPrompt = `You are auditing the website ${domain} (brand: ${brandName}) for AI machine readability. You MUST use Google Search to find current, live information about this website.
 
 Research the site and assess ALL of the following checks in a SINGLE analysis:
@@ -555,6 +562,12 @@ async function assessCheck(
   usage?: AiUsageContext
 ): Promise<AuditCheckDetail> {
   const researchPrompt = check.prompt(domain, brandName, hybridContext);
+
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError(`readability check ${check.id}`);
+    return fakeAuditCheck(check.name, check.id, domain);
+  }
 
   const useSearchFallback = researchPrompt.startsWith("USE_SEARCH_FALLBACK:");
   const cleanedPrompt = useSearchFallback ? researchPrompt.replace("USE_SEARCH_FALLBACK:", "") : researchPrompt;
