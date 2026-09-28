@@ -3,6 +3,7 @@ import type { ActionTicket, Brand } from "@shared/schema";
 import type { FreshDataBundle } from "./data-freshness";
 import { executeAiCall, type AiUsageContext } from "./ai-usage";
 import { usageFromGemini } from "./llm-provider/gemini/usage";
+import { fakeAiSleep, isFakeAiEnabled, maybeThrowFakeAiError } from "./fake-ai";
 
 interface RawFinding {
   source: string;
@@ -22,6 +23,18 @@ interface ConsolidatedTicket {
 }
 
 async function consolidateWithAI(findings: RawFinding[], brandName: string, usage?: AiUsageContext): Promise<ConsolidatedTicket[]> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    try {
+      maybeThrowFakeAiError("ticket consolidation");
+    } catch (error) {
+      // Mirror the real path: AI failures degrade to rule-based grouping.
+      console.error("FAKE_AI consolidation failed, falling back to rule-based grouping:", error);
+    }
+    // The rule-based path is the schema-valid fallback the real AI path
+    // degrades to, so it doubles as the deterministic fake.
+    return ruleBasedConsolidation(findings);
+  }
   if (findings.length <= 3) {
     return findings.map(f => ({
       title: f.title,
@@ -156,7 +169,7 @@ JSON array only, no markdown fences or extra text.`;
   }
 }
 
-function ruleBasedConsolidation(findings: RawFinding[]): ConsolidatedTicket[] {
+export function ruleBasedConsolidation(findings: RawFinding[]): ConsolidatedTicket[] {
   const groups: Record<string, RawFinding[]> = {};
 
   for (const f of findings) {
