@@ -14,7 +14,8 @@
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/run-migrations.ts && tsx scripts/sync-replit-dev-schema.ts",
-    "db:backup-and-migrate": "tsx scripts/run-migrations.ts --backup && tsx scripts/sync-replit-dev-schema.ts"
+    "db:backup-and-migrate": "tsx scripts/run-migrations.ts --backup && tsx scripts/sync-replit-dev-schema.ts",
+    "stress:fake": "tsx scripts/fake-ai-stress.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

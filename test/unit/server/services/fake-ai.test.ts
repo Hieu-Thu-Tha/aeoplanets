@@ -80,7 +80,7 @@ test("fakeVisibilityText parses through the real extractInfo across variants", (
     seen.add(`${parsed.appeared}:${parsed.sentiment}:${parsed.citationPresent}`);
   }
   // Deterministic rotation must yield a mix, not identical rows.
-  assert.ok(seen.size > 1, `expected varied fake results, got ${[...seen]}`);
+  assert.ok(seen.size > 1, `expected varied fake results, got ${Array.from(seen)}`);
 });
 
 test("provider runners return schema-valid fakes with no API keys", async () => {

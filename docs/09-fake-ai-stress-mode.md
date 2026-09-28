@@ -70,5 +70,28 @@ FAKE_AI=1 FAKE_AI_DELAY_MS=20 FAKE_AI_DELAY_MAX_MS=... npm run dev
 # ai_cache fill with synthetic rows. Re-run with FAKE_AI unset for real data.
 ```
 
+## Stress driver (`npm run stress:fake` / `scripts/fake-ai-stress.ts`)
+
+Concurrent load driver for the fake paths. Refuses to run unless `FAKE_AI=1`
+(exit 1 otherwise), so it can never burn real tokens by accident.
+
+```bash
+FAKE_AI=1 FAKE_AI_DELAY_MS=20 npm run stress:fake -- --iterations 50 --concurrency 8
+FAKE_AI=1 npm run stress:fake -- --ops scan,news --iterations 100 --concurrency 16
+# DB-backed end-to-end scans (needs DATABASE_URL + existing brands):
+FAKE_AI=1 DATABASE_URL=... npm run stress:fake -- --ops fullscan --brand-ids 1,2 --iterations 4 --concurrency 2
+```
+
+Ops: `scan` (4-provider fan-out with per-result schema validation),
+`daily` (rotation), `news` (article validation), `reports` (all three report
+types against fabricated metrics), `fixtures` (raw builders), `fullscan`
+(real `assessmentEngine.runFullScan`, storage writes included).
+
+Output is a per-op table (count / failures / chaos / mean / p50 / p95 / max)
+plus overall ops/s. Failures carrying the `FAKE_AI simulated` chaos marker
+are counted separately and do not fail the run; any other failure exits 1.
+`parseArgs`/`computeStats` are unit-tested in
+`test/unit/server/services/fake-ai-stress.test.ts`.
+
 Fake rows are identifiable: fixture text contains `FAKE_AI`, fake domains
 use `*.example.com`, and weakness/review scores cite `FakeReviewSite`.
