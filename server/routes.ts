@@ -51,6 +51,21 @@ import {
   GEMINI_SEARCH_QUERY_METER,
   OPENAI_WEB_SEARCH_METER,
 } from "@shared/ai-billing";
+import {
+  fakeAiSleep,
+  fakeBenchmarkSummary,
+  fakeBrandResearch,
+  fakeCompetitorAnalysis,
+  fakeCompetitorList,
+  fakeCompetitorLookup,
+  fakeConfusionExplanation,
+  fakeFixSuggestion,
+  fakeGeneratedQuestions,
+  fakeVolumeEstimates,
+  fakeWeaknessReport,
+  isFakeAiEnabled,
+  maybeThrowFakeAiError,
+} from "./services/fake-ai";
 
 function getUserId(req: Request): string {
   return getLocalUserId(req);
@@ -256,14 +271,21 @@ Rules:
 - Every field is REQUIRED. If you genuinely cannot determine a field, set its value to null.
 - Return ONLY valid JSON. No markdown, no code fences.`;
 
-      const { callGeminiWithRetry: callGeminiWithRetryProv } = await import("./services/gemini-retry");
-      const researchResponse = await callGeminiWithRetryProv(client, {
-        model: "gemini-3.1-pro-preview",
-        contents: researchPrompt,
-        config: { tools: [{ googleSearch: {} }] },
-        label: "provision-brand-research",
-        usage: { userId: adminUserId, brandId: null, feature: "provisioning_research" },
-      });
+      let researchResponse: { text?: string | null };
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("provision brand research");
+        researchResponse = { text: JSON.stringify(fakeBrandResearch(normalised)) };
+      } else {
+        const { callGeminiWithRetry: callGeminiWithRetryProv } = await import("./services/gemini-retry");
+        researchResponse = await callGeminiWithRetryProv(client, {
+          model: "gemini-3.1-pro-preview",
+          contents: researchPrompt,
+          config: { tools: [{ googleSearch: {} }] },
+          label: "provision-brand-research",
+          usage: { userId: adminUserId, brandId: null, feature: "provisioning_research" },
+        });
+      }
 
       const researchText = researchResponse.text?.trim() || "";
       let brandProfile: any = {};
@@ -291,14 +313,21 @@ Rules:
 - Only include direct competitors — companies selling similar products/services.
 - Return ONLY valid JSON. No markdown, no code fences.`;
 
-      const { callGeminiWithRetry: callGeminiWithRetryProvComp } = await import("./services/gemini-retry");
-      const competitorResponse = await callGeminiWithRetryProvComp(client, {
-        model: "gemini-3.1-pro-preview",
-        contents: competitorPrompt,
-        config: { tools: [{ googleSearch: {} }] },
-        label: "provision-competitor-research",
-        usage: { userId: adminUserId, brandId: null, feature: "provisioning_research" },
-      });
+      let competitorResponse: { text?: string | null };
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("provision competitor research");
+        competitorResponse = { text: JSON.stringify(fakeCompetitorList(brandName)) };
+      } else {
+        const { callGeminiWithRetry: callGeminiWithRetryProvComp } = await import("./services/gemini-retry");
+        competitorResponse = await callGeminiWithRetryProvComp(client, {
+          model: "gemini-3.1-pro-preview",
+          contents: competitorPrompt,
+          config: { tools: [{ googleSearch: {} }] },
+          label: "provision-competitor-research",
+          usage: { userId: adminUserId, brandId: null, feature: "provisioning_research" },
+        });
+      }
 
       const compText = competitorResponse.text?.trim() || "";
       let competitors: string[] = [];
@@ -1753,15 +1782,23 @@ Rules:
 - Every field is REQUIRED. If you genuinely cannot determine a field from your research, set its value to null — do NOT fabricate information.
 - Return ONLY valid JSON. No markdown, no explanation text, no code fences.`;
 
-      const response = await callGeminiWithRetry(client, {
-        model: "gemini-3.1-pro-preview",
-        contents: prompt,
-        config: { tools: [{ googleSearch: {} }] },
-        label: "brand-research",
-        usage: { userId: getOwnerIdForBrands(req), brandId: null, feature: "brand_research" },
-      });
+      let brandResearchResponse: { text?: string | null };
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("brand research");
+        brandResearchResponse = { text: JSON.stringify(fakeBrandResearch(normalised)) };
+      } else {
+        const response = await callGeminiWithRetry(client, {
+          model: "gemini-3.1-pro-preview",
+          contents: prompt,
+          config: { tools: [{ googleSearch: {} }] },
+          label: "brand-research",
+          usage: { userId: getOwnerIdForBrands(req), brandId: null, feature: "brand_research" },
+        });
+        brandResearchResponse = response;
+      }
 
-      const text = response.text?.trim() || "";
+      const text = brandResearchResponse.text?.trim() || "";
       if (!text) {
         console.error("Gemini returned empty response for brand research");
         return res.status(503).json({ message: "AI returned an empty response. Please try again in a moment." });
@@ -1882,16 +1919,23 @@ Rules:
 - Use actual domain names (e.g. "hubspot.com" not "https://hubspot.com").
 - Return ONLY valid JSON. No markdown, no explanation text, no code fences.`;
 
-      const { callGeminiWithRetry, friendlyGeminiError } = await import("./services/gemini-retry");
-      const response = await callGeminiWithRetry(client, {
-        model: "gemini-3.1-pro-preview",
-        contents: prompt,
-        config: { tools: [{ googleSearch: {} }] },
-        label: "competitor-research",
-        usage: { userId: getOwnerIdForBrands(req), brandId: null, feature: "competitor_research" },
-      });
+      let competitorResearchResponse: { text?: string | null };
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("competitor research");
+        competitorResearchResponse = { text: JSON.stringify({ competitors: fakeCompetitorList(brandName) }) };
+      } else {
+        const { callGeminiWithRetry, friendlyGeminiError } = await import("./services/gemini-retry");
+        competitorResearchResponse = await callGeminiWithRetry(client, {
+          model: "gemini-3.1-pro-preview",
+          contents: prompt,
+          config: { tools: [{ googleSearch: {} }] },
+          label: "competitor-research",
+          usage: { userId: getOwnerIdForBrands(req), brandId: null, feature: "competitor_research" },
+        });
+      }
 
-      const text = response.text?.trim() || "";
+      const text = competitorResearchResponse.text?.trim() || "";
       if (!text) {
         console.error("Gemini returned empty response for competitor research");
         return res.status(503).json({ message: "AI returned an empty response. Please try again in a moment." });
@@ -1966,16 +2010,23 @@ Rules:
 - Use the company's actual trading name, not just the domain.
 - Return ONLY valid JSON. No markdown, no explanation text, no code fences.`;
 
-      const { callGeminiWithRetry, friendlyGeminiError } = await import("./services/gemini-retry");
-      const response = await callGeminiWithRetry(client, {
-        model: "gemini-3.1-pro-preview",
-        contents: prompt,
-        config: { tools: [{ googleSearch: {} }] },
-        label: "competitor-url-research",
-        usage: { userId: getOwnerIdForBrands(req), brandId: null, feature: "competitor_research" },
-      });
+      let competitorUrlResponse: { text?: string | null };
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("competitor URL research");
+        competitorUrlResponse = { text: JSON.stringify(fakeCompetitorLookup(domain)) };
+      } else {
+        const { callGeminiWithRetry, friendlyGeminiError } = await import("./services/gemini-retry");
+        competitorUrlResponse = await callGeminiWithRetry(client, {
+          model: "gemini-3.1-pro-preview",
+          contents: prompt,
+          config: { tools: [{ googleSearch: {} }] },
+          label: "competitor-url-research",
+          usage: { userId: getOwnerIdForBrands(req), brandId: null, feature: "competitor_research" },
+        });
+      }
 
-      const text = response.text?.trim() || "";
+      const text = competitorUrlResponse.text?.trim() || "";
       if (!text) {
         return res.status(503).json({ message: "AI returned an empty response. Please try again in a moment." });
       }
@@ -2809,18 +2860,24 @@ Write a concise executive summary (3-5 paragraphs) covering:
 
 Be specific with numbers. Be direct about weaknesses. Frame performance impacts in terms of what matters to this brand's specific audience and industry. Use a professional analytical tone. Do NOT use markdown headers or bullet points — write in flowing paragraphs. Do not use code fences.`;
 
-        const response = await executeAiCall(
-          { userId: brand.userId, brandId, feature: "other" },
-          "gemini",
-          "gemini-3.1-pro-preview",
-          () => client.models.generateContent({
-            model: "gemini-3.1-pro-preview",
-            contents: prompt,
-            config: { maxOutputTokens: 1000, temperature: 0.7 },
-          }),
-          usageFromGemini,
-        );
-        aiSummary = response.text?.trim() || "";
+        if (isFakeAiEnabled()) {
+          await fakeAiSleep();
+          maybeThrowFakeAiError("benchmark summary");
+          aiSummary = fakeBenchmarkSummary(brandDomain, Object.keys(compScoresMap).length);
+        } else {
+          const response = await executeAiCall(
+            { userId: brand.userId, brandId, feature: "other" },
+            "gemini",
+            "gemini-3.1-pro-preview",
+            () => client.models.generateContent({
+              model: "gemini-3.1-pro-preview",
+              contents: prompt,
+              config: { maxOutputTokens: 1000, temperature: 0.7 },
+            }),
+            usageFromGemini,
+          );
+          aiSummary = response.text?.trim() || "";
+        }
         if (!aiSummary) {
           aiSummary = "AI analysis completed but returned empty. Try refreshing the report.";
         }
@@ -3005,15 +3062,21 @@ Write a clear, helpful explanation in 3-4 sentences that covers:
 
 Keep the tone professional but accessible. Do not use jargon. Write as a single paragraph, not a list.`;
 
-      const response = await executeAiCall(
-        { userId: getOwnerIdForBrands(req), brandId: brandId ?? null, feature: "perception" },
-        "gemini",
-        "gemini-3.1-pro-preview",
-        () => client.models.generateContent({ model: "gemini-3.1-pro-preview", contents: prompt }),
-        usageFromGemini,
-      );
-
-      const explanation = response.text?.trim();
+      let explanation: string | undefined;
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("confusion explanation");
+        explanation = fakeConfusionExplanation(marker, brandName);
+      } else {
+        const response = await executeAiCall(
+          { userId: getOwnerIdForBrands(req), brandId: brandId ?? null, feature: "perception" },
+          "gemini",
+          "gemini-3.1-pro-preview",
+          () => client.models.generateContent({ model: "gemini-3.1-pro-preview", contents: prompt }),
+          usageFromGemini,
+        );
+        explanation = response.text?.trim();
+      }
       if (!explanation) {
         return res.status(500).json({ message: "AI returned an empty response" });
       }
@@ -3098,20 +3161,28 @@ Rules:
 - When suggesting how to compete, reference ${brandName}'s actual products and differentiators, not generic advice
 - Return ONLY valid JSON`;
 
-      const response = await executeAiCall(
-        { userId: getOwnerIdForBrands(req), brandId: brandId ?? null, feature: "competitor_research" },
-        "gemini",
-        "gemini-2.5-flash",
-        () => client.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-          config: { tools: [{ googleSearch: {} }] },
-        }),
-        usageFromGemini,
-        { expectedMeters: [GEMINI_GROUNDED_PROMPT_METER] },
-      );
+      let competitorAnalysisText: string;
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("competitor analysis");
+        competitorAnalysisText = JSON.stringify(fakeCompetitorAnalysis(competitorName, brandName));
+      } else {
+        const response = await executeAiCall(
+          { userId: getOwnerIdForBrands(req), brandId: brandId ?? null, feature: "competitor_research" },
+          "gemini",
+          "gemini-2.5-flash",
+          () => client.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: { tools: [{ googleSearch: {} }] },
+          }),
+          usageFromGemini,
+          { expectedMeters: [GEMINI_GROUNDED_PROMPT_METER] },
+        );
+        competitorAnalysisText = response.text?.trim() || "";
+      }
 
-      const text = response.text?.trim() || "";
+      const text = competitorAnalysisText;
       if (!text) {
         return res.status(500).json({ message: "AI returned an empty response" });
       }
@@ -3203,28 +3274,34 @@ Rules:
 - Return ONLY valid JSON`;
 
       let text = "";
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const response = await executeAiCall(
-            { userId: getOwnerIdForBrands(req), brandId: brandId ?? null, feature: "competitor_research" },
-            "gemini",
-            "gemini-2.5-flash",
-            () => client.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents: prompt,
-              config: { tools: [{ googleSearch: {} }] },
-            }),
-            usageFromGemini,
-            { expectedMeters: [GEMINI_GROUNDED_PROMPT_METER] },
-          );
-          text = response.text?.trim() || "";
-          if (text) break;
-          console.log(`[CompetitorWeakness] Attempt ${attempt + 1} returned empty, retrying...`);
-        } catch (err: any) {
-          if (isAiUsageCapExceededError(err)) throw err;
-          console.log(`[CompetitorWeakness] Attempt ${attempt + 1} failed: ${err?.message}`);
-          if (attempt === 1) throw err;
-          await new Promise(r => setTimeout(r, 2000));
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("competitor weakness");
+        text = JSON.stringify(fakeWeaknessReport(competitorName));
+      } else {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const response = await executeAiCall(
+              { userId: getOwnerIdForBrands(req), brandId: brandId ?? null, feature: "competitor_research" },
+              "gemini",
+              "gemini-2.5-flash",
+              () => client.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: { tools: [{ googleSearch: {} }] },
+              }),
+              usageFromGemini,
+              { expectedMeters: [GEMINI_GROUNDED_PROMPT_METER] },
+            );
+            text = response.text?.trim() || "";
+            if (text) break;
+            console.log(`[CompetitorWeakness] Attempt ${attempt + 1} returned empty, retrying...`);
+          } catch (err: any) {
+            if (isAiUsageCapExceededError(err)) throw err;
+            console.log(`[CompetitorWeakness] Attempt ${attempt + 1} failed: ${err?.message}`);
+            if (attempt === 1) throw err;
+            await new Promise(r => setTimeout(r, 2000));
+          }
         }
       }
 
@@ -4972,6 +5049,25 @@ Rules:
         return res.json({ message: "All questions already have volume estimates", updated: 0 });
       }
 
+      if (isFakeAiEnabled()) {
+        // Placed before the OpenAI client construction: the SDK throws on a
+        // missing key, and fake mode must run keyless.
+        await fakeAiSleep();
+        maybeThrowFakeAiError("volume estimation");
+        const fakes = fakeVolumeEstimates(`volumes-route:${brandId}`, needsEstimate.length);
+        let updated = 0;
+        for (let i = 0; i < needsEstimate.length; i++) {
+          const est = fakes[i];
+          await storage.updateUserQuestion(needsEstimate[i].id, {
+            searchVolume: est.volume_label,
+            searchVolumeMin: est.volume_min,
+            searchVolumeMax: est.volume_max,
+          });
+          updated++;
+        }
+        return res.json({ message: "Volume estimation complete", updated, total: needsEstimate.length });
+      }
+
       const region = brand.territory === "regional" && brand.location ? brand.location : "global";
       const category = brand.category || "general";
 
@@ -5947,25 +6043,31 @@ OUTPUT FORMAT RULES (CRITICAL — follow exactly):
 IMPORTANT: Only include facts and data you can verify through Google Search grounding. If you cannot find specific information about the brand's website, explicitly state what you could not verify rather than inventing details.`;
       }
 
-      const response = await executeAiCall(
-        { userId: getOwnerIdForBrands(req), brandId: ticket.brandId, feature: "suggest_fix" },
-        "gemini",
-        "gemini-3.1-pro-preview",
-        () => client.models.generateContent({
-          model: "gemini-3.1-pro-preview",
-          contents: prompt,
-          config: { temperature: 0.3, tools: [{ googleSearch: {} }] },
-        }),
-        usageFromGemini,
-        { expectedMeters: [GEMINI_SEARCH_QUERY_METER] },
-      );
-
       let text: string;
-      if (typeof response.text === "function") {
-        const result = response.text();
-        text = result instanceof Promise ? await result : result;
+      if (isFakeAiEnabled()) {
+        await fakeAiSleep();
+        maybeThrowFakeAiError("fix suggestion");
+        text = fakeFixSuggestion(ticket.title, brandDomain);
       } else {
-        text = String((response as any).text ?? "");
+        const response = await executeAiCall(
+          { userId: getOwnerIdForBrands(req), brandId: ticket.brandId, feature: "suggest_fix" },
+          "gemini",
+          "gemini-3.1-pro-preview",
+          () => client.models.generateContent({
+            model: "gemini-3.1-pro-preview",
+            contents: prompt,
+            config: { temperature: 0.3, tools: [{ googleSearch: {} }] },
+          }),
+          usageFromGemini,
+          { expectedMeters: [GEMINI_SEARCH_QUERY_METER] },
+        );
+
+        if (typeof response.text === "function") {
+          const result = response.text();
+          text = result instanceof Promise ? await result : result;
+        } else {
+          text = String((response as any).text ?? "");
+        }
       }
 
       if (!text || text.trim().length === 0) {
@@ -6149,6 +6251,17 @@ Rules:
 - Each question explores a different funnel stage of the SAME topic — not different topics
 - EXACTLY 1 of each funnel stage per set (${stagesLabel})
 - Do NOT just rephrase the key term as a question — think about real people in real scenarios related to that topic`;
+
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("question generation");
+    const fake = fakeGeneratedQuestions(
+      termText,
+      brandName,
+      stages as Array<"awareness" | "consideration" | "commercial">,
+    );
+    return { userQuestions: fake.userQuestions, brandSentiment: fake.brandSentiment };
+  }
 
   let text = "";
   for (let attempt = 0; attempt < 2; attempt++) {
