@@ -124,6 +124,11 @@ async function getPerceptionFromOpenAI(brand: Brand, usage?: AiUsageContext): Pr
 }
 
 async function getPerceptionFromAnthropic(brand: Brand, usage?: AiUsageContext): Promise<Partial<PerceptionData>> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("anthropic perception");
+    return fakePerceptionResult(brand.domain);
+  }
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const prompt = buildPerceptionPrompt(brand);
 
