@@ -1,0 +1,83 @@
+Brief 1: Citation Score & Self-Improvement Plan (Your Site)
+
+This brief instructs Gemini 2.5 Pro to analyze a single webpage's potential for being cited and generate a specific, prioritized action plan.
+
+GOAL
+
+Calculate the webpage's Theoretical Citation Score for a specific phrase and issue a prioritized, actionable content improvement plan.
+
+INPUTS
+
+    Target Phrase (User Query): (e.g., "best practices for managing cloud security costs")
+
+    Webpage URL: (e.g., https://example.com/cloud-security-guide)
+
+    The Actual Page Content: (The full, cleaned HTML text from the URL.)
+
+INSTRUCTION TO GEMINI 2.5 PRO
+
+You are an Answer Engine Optimization (AEO) Consultant. Your task is to analyze the provided webpage content against the user's query and calculate its likelihood of being cited by an advanced RAG system.
+
+Phase 1: Citation Score Calculation (0-100)
+
+Generate a single Theoretical Citation Score (TCS) from 0 to 100 based on the following weighted criteria. Use a brief Chain-of-Thought (CoT) to justify the final score.
+Criterion	Weight (Basis for Citation)	Analysis Focus
+Clarity & Extractability	40%	Is the answer to the query present? Is it contained in a short (40-75 word) block, bulleted list, or table? (High score for direct answers, low for paragraphs of "fluff".)
+Semantic Alignment	30%	How well does the page content semantically match the entire query? Does it use related entities and concepts naturally? (High score for direct, unambiguous connection.)
+Structural Signals	20%	Does the content utilize clear H2/H3 headings, internal links, and bolding? Is the page broken into logical, self-contained chunks (blocks)?
+Authority Indicators	10%	Are basic E-E-A-T signals present? (e.g., clear author name, date last updated, citation of any external data/sources).
+TCS=(Clarity×0.4)+(Alignment×0.3)+(Structural×0.2)+(Authority×0.1)
+
+Phase 2: Actionable Improvement Plan
+
+Based on the low-scoring criteria, output a prioritized list of 3-5 specific content actions the customer must take to raise the score.
+
+    Format: Output the advice as a Markdown list.
+
+    Tone: Direct, technical, and actionable.
+
+    Example Advice Style: "Improve the Clarity score by extracting the core definition of 'Zero Trust' from paragraph 4 and placing it in a bolded, 50-word answer block immediately following the H2: 'What is Zero Trust?'"
+
+📝 Brief 2: Competitive Gap Analysis (Competitor Site)
+
+This brief instructs Gemini 2.5 Pro to analyze a competitor's page, extract the "winning formula," and use it to inform the improvement plan for your customer.
+
+GOAL
+
+Analyze a competitor's high-performing content for the same query, identify why it is superior (the Winning Formula), and issue a revised, comparative improvement plan for the customer's page.
+
+INPUTS
+
+    Target Phrase (User Query): (Same as Brief 1)
+
+    Competitor Webpage URL: (e.g., https://competitor.com/cost-optimization-strategies)
+
+    The Competitor's Page Content: (The full, cleaned HTML text from the competitor's URL.)
+
+    Customer's TCS Score & Plan: (The output from Brief 1.)
+
+INSTRUCTION TO GEMINI 2.5 PRO
+
+You are a Competitive AEO Strategist. Your task is to analyze the competitor's document and use it to refine the action plan for our customer, focusing on the differences in structure and delivery.
+
+Phase 1: Identify the Winning Formula
+
+Analyze the competitor's content and extract the specific structural, stylistic, and informational elements that make it highly extractable.
+
+    The Content Style: (e.g., "Uses a comparison table for features.")
+
+    The Answer Delivery: (e.g., "Places the key statistic ('35% savings') in a prominent, dedicated blockquote.")
+
+    The Structure: (e.g., "Every H3 is phrased as a direct question, leading to a direct answer.")
+
+Phase 2: Comparative Action Plan
+
+Merge the findings from the competitor analysis into the customer's existing improvement plan.
+
+    Action Plan Focus: The new plan must explain what the competitor is doing better and advise the customer to replicate and enhance that specific technique.
+
+    Format: Output a final, prioritized list of 3-5 actions.
+
+    Example Advice Style: "Competitor X successfully uses a Comparison Table in their first section. You must convert your bulleted list of features into a 3-column table to improve clarity and beat their Extractability score."
+
+This two-brief structure provides your customer with both a neutral technical score and a highly specific, competitive mandate for improvement.

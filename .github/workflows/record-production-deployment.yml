@@ -1,0 +1,169 @@
+name: Record Production Deployment and Notify
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag already deployed manually to production (for example, 1.2.3)
+        required: true
+        type: string
+      confirm_deployed:
+        description: I confirm this tag is currently deployed and verified on production
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: record-production-deployment-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Record production deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.release.outputs.changed }}
+      created: ${{ steps.release.outputs.created }}
+
+    steps:
+      - name: Checkout main with tags
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate confirmation and tag
+        env:
+          CONFIRM_DEPLOYED: ${{ inputs.confirm_deployed }}
+          DEPLOY_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [ "$CONFIRM_DEPLOYED" != "true" ]; then
+            echo "Production deployment must be confirmed before it can be recorded" >&2
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_TAG" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Invalid tag '$DEPLOY_TAG'; expected X.Y.Z" >&2
+            exit 1
+          fi
+
+          git fetch origin main --tags --force
+          if ! git rev-parse --verify --quiet "refs/tags/${DEPLOY_TAG}^{commit}" >/dev/null; then
+            echo "Tag '$DEPLOY_TAG' does not exist" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "refs/tags/${DEPLOY_TAG}^{commit}" origin/main; then
+            echo "Tag '$DEPLOY_TAG' is not reachable from main" >&2
+            exit 1
+          fi
+
+      - name: Create or update GitHub Release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEPLOY_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          CREATED=false
+          if ! gh release view "$DEPLOY_TAG" >/dev/null 2>&1; then
+            gh release create "$DEPLOY_TAG" \
+              --verify-tag \
+              --title "$DEPLOY_TAG" \
+              --generate-notes
+            CREATED=true
+          fi
+
+          CURRENT_NOTES="$(mktemp)"
+          CLEAN_NOTES="$(mktemp)"
+          UPDATED_NOTES="$(mktemp)"
+          trap 'rm -f "$CURRENT_NOTES" "$CLEAN_NOTES" "$UPDATED_NOTES"' EXIT
+          gh release view "$DEPLOY_TAG" --json body --jq .body > "$CURRENT_NOTES"
+
+          STAGING_CHECKED=false
+          if grep -qE '^- \[[xX]\] Staging[[:space:]]*$' "$CURRENT_NOTES"; then
+            STAGING_CHECKED=true
+          fi
+
+          PRODUCTION_CHECKED=false
+          if grep -qE '^- \[[xX]\] Production[[:space:]]*$' "$CURRENT_NOTES"; then
+            PRODUCTION_CHECKED=true
+          fi
+
+          if [ "$PRODUCTION_CHECKED" = "true" ] && [ "$CREATED" = "false" ]; then
+            {
+              echo "created=false"
+              echo "changed=false"
+            } >> "$GITHUB_OUTPUT"
+            echo "Production was already recorded for '$DEPLOY_TAG'; no release edit or Slack notification is needed."
+            exit 0
+          fi
+
+          awk '
+            tolower($0) == "## deployments" { skipping = 1; next }
+            skipping && /^## / { skipping = 0 }
+            !skipping { print }
+          ' "$CURRENT_NOTES" > "$CLEAN_NOTES"
+
+          {
+            cat "$CLEAN_NOTES"
+            printf '\n## Deployments\n\n'
+            if [ "$STAGING_CHECKED" = "true" ]; then
+              printf '%s\n' '- [x] Staging'
+            else
+              printf '%s\n' '- [ ] Staging'
+            fi
+            printf '%s\n' '- [x] Production'
+          } > "$UPDATED_NOTES"
+
+          gh release edit "$DEPLOY_TAG" --notes-file "$UPDATED_NOTES"
+
+          {
+            echo "created=$CREATED"
+            echo "changed=true"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bookkeeping summary
+        env:
+          DEPLOY_TAG: ${{ inputs.tag }}
+          RELEASE_CREATED: ${{ steps.release.outputs.created }}
+          RECORD_CHANGED: ${{ steps.release.outputs.changed }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ inputs.tag }}
+        run: |
+          {
+            echo "## Production deployment bookkeeping"
+            echo ""
+            echo "- Tag: \`$DEPLOY_TAG\`"
+            echo "- Deployment performed by this workflow: \`no\`"
+            echo "- Release created: \`$RELEASE_CREATED\`"
+            echo "- Production newly recorded: \`$RECORD_CHANGED\`"
+            echo "- Release: $RELEASE_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  notify-slack:
+    name: Notify Slack
+    needs: record
+    if: ${{ needs.record.outputs.changed == 'true' }}
+    uses: ./.github/workflows/slack-notification.yml
+    with:
+      kind: deployment
+      status: success
+      environment: production
+      tag: ${{ inputs.tag }}
+      repository_url: ${{ format('{0}/{1}', github.server_url, github.repository) }}
+      version_url: ${{ format('{0}/{1}/releases/tag/{2}', github.server_url, github.repository, inputs.tag) }}
+      release_created: ${{ needs.record.outputs.created == 'true' }}
+      workflow_url: ${{ format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+    secrets:
+      slack_bot_token: ${{ secrets.ALPON_WATCHDOG_SLACK_BOT_TOKEN }}
+      slack_channel_id: ${{ secrets.SLACK_CHANNEL_ID }}

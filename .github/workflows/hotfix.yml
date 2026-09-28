@@ -1,0 +1,890 @@
+name: Hotfix Release Tracker
+
+on:
+  # Preferred way to create a hotfix.
+  #
+  # Developer supplies:
+  #   base_tag: v0.16.5
+  #   summary:  Fix payment retry race
+  #
+  # Workflow creates:
+  #   hotfix/v0.16.5-fix-payment-retry-race
+  workflow_dispatch:
+    inputs:
+      base_tag:
+        description: "Base SemVer tag, e.g. v0.16.5 or 0.16.5"
+        required: true
+        type: string
+
+      summary:
+        description: "Brief hotfix description, e.g. Fix payment retry race"
+        required: true
+        type: string
+
+  # Every subsequent push re-generates the commit roll-up
+  # in the existing draft release.
+  push:
+    branches:
+      - "hotfix/**"
+
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Resolve / create the hotfix branch.
+  #
+  # workflow_dispatch:
+  #   - validates the requested base tag
+  #   - converts summary into a safe slug
+  #   - refuses to start if another draft hotfix exists for this base
+  #   - starts from latest published hotfix for this base, if one exists
+  #   - otherwise starts from the base SemVer tag
+  #   - creates the branch
+  #
+  # push:
+  #   - validates the branch naming convention
+  #   - extracts the base tag from the branch name
+  # ---------------------------------------------------------------------------
+  prepare:
+    name: Resolve hotfix
+    runs-on: ubuntu-latest
+
+    outputs:
+      branch: ${{ steps.resolve.outputs.branch }}
+      base_tag: ${{ steps.resolve.outputs.base_tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: |
+          set -euo pipefail
+          git fetch --force --tags origin
+
+      - name: Resolve hotfix context
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BASE_TAG: ${{ inputs.base_tag }}
+          INPUT_SUMMARY: ${{ inputs.summary }}
+          PUSH_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          SEMVER_RE='^v?[0-9]+\.[0-9]+\.[0-9]+$'
+          BRANCH_RE='^hotfix/(v?[0-9]+\.[0-9]+\.[0-9]+)-([a-z0-9]+(-[a-z0-9]+)*)$'
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            BASE_TAG="$INPUT_BASE_TAG"
+
+            # ---------------------------------------------------------------
+            # Validate base tag syntax.
+            # Stable SemVer only:
+            #
+            #   0.16.5
+            #   v0.16.5
+            #
+            # Deliberately does not accept prerelease tags like 0.16.5-rc.1,
+            # because that would make parsing the branch format ambiguous.
+            # ---------------------------------------------------------------
+            if [[ ! "$BASE_TAG" =~ $SEMVER_RE ]]; then
+              echo "::error::Invalid base tag '$BASE_TAG'. Expected something like v0.16.5 or 0.16.5."
+              exit 1
+            fi
+
+            # ---------------------------------------------------------------
+            # Base tag must actually exist.
+            # ---------------------------------------------------------------
+            if ! git rev-parse -q --verify "refs/tags/${BASE_TAG}^{commit}" >/dev/null; then
+              echo "::error::Tag '$BASE_TAG' does not exist."
+              exit 1
+            fi
+
+            # ---------------------------------------------------------------
+            # Turn arbitrary human description into a deterministic slug.
+            #
+            # "Fix Payment Retry Race!"
+            # becomes:
+            # "fix-payment-retry-race"
+            # ---------------------------------------------------------------
+            SLUG="$(
+              printf '%s' "$INPUT_SUMMARY" \
+                | tr '[:upper:]' '[:lower:]' \
+                | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g' \
+                | cut -c1-60 \
+                | sed -E 's/-+$//'
+            )"
+
+            if [[ -z "$SLUG" ]]; then
+              echo "::error::Summary produced an empty branch slug."
+              exit 1
+            fi
+
+            BRANCH="hotfix/${BASE_TAG}-${SLUG}"
+            PREFIX="hotfix-${BASE_TAG}-"
+
+            # ---------------------------------------------------------------
+            # Do not silently reuse an existing branch.
+            # ---------------------------------------------------------------
+            if git ls-remote --exit-code \
+              --heads origin "refs/heads/${BRANCH}" \
+              >/dev/null 2>&1; then
+              echo "::error::Branch '$BRANCH' already exists."
+              exit 1
+            fi
+
+            # ---------------------------------------------------------------
+            # Read existing releases.
+            # We use releases rather than blindly using tags because we only
+            # want a published hotfix to become the parent of the next one.
+            # ---------------------------------------------------------------
+            RELEASE_PAGES="$RUNNER_TEMP/releases-pages.json"
+            ALL_RELEASES="$RUNNER_TEMP/releases.json"
+
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              > "$RELEASE_PAGES"
+
+            jq -s 'add // []' \
+              "$RELEASE_PAGES" \
+              > "$ALL_RELEASES"
+
+            ACTIVE_DRAFTS=0
+            LATEST_PUBLISHED_N=-1
+            LATEST_PUBLISHED_TAG=""
+
+            while IFS=$'\t' read -r TAG IS_DRAFT; do
+              [[ -z "$TAG" ]] && continue
+
+              if [[ "$TAG" == "$PREFIX"* ]]; then
+                N="${TAG#$PREFIX}"
+
+                # Only tags exactly matching:
+                #
+                #   hotfix-v0.16.5-1
+                #   hotfix-v0.16.5-2
+                #
+                # participate in sequencing.
+                if [[ "$N" =~ ^[0-9]+$ ]]; then
+                  if [[ "$IS_DRAFT" == "true" ]]; then
+                    ACTIVE_DRAFTS=$((ACTIVE_DRAFTS + 1))
+                  elif (( N > LATEST_PUBLISHED_N )); then
+                    LATEST_PUBLISHED_N="$N"
+                    LATEST_PUBLISHED_TAG="$TAG"
+                  fi
+                fi
+              fi
+            done < <(
+              jq -r \
+                '.[] | [.tag_name, (.draft | tostring)] | @tsv' \
+                "$ALL_RELEASES"
+            )
+
+            # ---------------------------------------------------------------
+            # Intentional safety rule:
+            #
+            # One active draft hotfix per base version.
+            #
+            # This prevents two hotfix branches from diverging from the same
+            # production lineage and later accidentally replacing each other.
+            # ---------------------------------------------------------------
+            if (( ACTIVE_DRAFTS > 0 )); then
+              echo "::error::There is already an active draft hotfix for '$BASE_TAG'. Publish/finish it before creating another."
+              exit 1
+            fi
+
+            # ---------------------------------------------------------------
+            # If v0.16.5 already has:
+            #
+            #   hotfix-v0.16.5-1
+            #   hotfix-v0.16.5-2
+            #
+            # and #2 is published, start the new branch from #2.
+            #
+            # Otherwise start directly from v0.16.5.
+            #
+            # This prevents a later hotfix from accidentally dropping earlier
+            # production fixes.
+            # ---------------------------------------------------------------
+            if [[ -n "$LATEST_PUBLISHED_TAG" ]]; then
+              START_REF="$LATEST_PUBLISHED_TAG"
+            else
+              START_REF="$BASE_TAG"
+            fi
+
+            if ! git rev-parse -q --verify \
+              "refs/tags/${START_REF}^{commit}" \
+              >/dev/null; then
+              echo "::error::Start tag '$START_REF' does not exist locally."
+              exit 1
+            fi
+
+            START_SHA="$(
+              git rev-parse "refs/tags/${START_REF}^{commit}"
+            )"
+
+            echo "Creating:"
+            echo "  Base tag:   $BASE_TAG"
+            echo "  Start ref:  $START_REF"
+            echo "  Branch:     $BRANCH"
+            echo "  Start SHA:  $START_SHA"
+
+            # ---------------------------------------------------------------
+            # Create branch from the exact desired commit.
+            #
+            # The push performed with GITHUB_TOKEN will intentionally NOT
+            # trigger another workflow run. This current workflow continues
+            # directly into the tracking job below.
+            # ---------------------------------------------------------------
+            # Create hotfix branch from the production lineage.
+            git switch --create "$BRANCH" "$START_SHA"
+            
+            # -----------------------------------------------------------------
+            # A hotfix may be based on an old tag that predates this workflow.
+            #
+            # GitHub evaluates push-triggered workflows from the pushed ref,
+            # so the hotfix branch itself MUST contain the tracker workflow.
+            #
+            # Always copy the current tracker from the default branch.
+            # -----------------------------------------------------------------
+            TRACKER_WORKFLOW=".github/workflows/hotfix.yml"
+            
+            git fetch origin \
+              "${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+            
+            mkdir -p "$(dirname "$TRACKER_WORKFLOW")"
+            
+            git restore \
+              --source="origin/${DEFAULT_BRANCH}" \
+              -- "$TRACKER_WORKFLOW"
+            
+            # Commit only if the hotfix lineage does not already contain the
+            # exact current version of the tracker.
+            if ! git diff --cached --quiet || ! git diff --quiet; then
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            
+              git add "$TRACKER_WORKFLOW"
+            
+              if ! git diff --cached --quiet; then
+                git commit \
+                  -m "chore(hotfix): install release tracker"
+              fi
+            fi
+            
+            git push --set-upstream origin "$BRANCH"
+          else
+            # ---------------------------------------------------------------
+            # Normal push to an existing hotfix branch.
+            #
+            # Enforce the naming format:
+            #
+            #   hotfix/v0.16.5-fix-payment-retry
+            #   hotfix/0.16.5-auth-timeout
+            # ---------------------------------------------------------------
+            BRANCH="$PUSH_BRANCH"
+
+            if [[ ! "$BRANCH" =~ $BRANCH_RE ]]; then
+              echo "::error::Invalid hotfix branch name '$BRANCH'."
+              echo "::error::Expected: hotfix/<semver>-<kebab-case-description>"
+              echo "::error::Example: hotfix/v0.16.5-fix-payment-retry"
+              exit 1
+            fi
+
+            BASE_TAG="${BASH_REMATCH[1]}"
+
+            if ! git rev-parse -q --verify \
+              "refs/tags/${BASE_TAG}^{commit}" \
+              >/dev/null; then
+              echo "::error::Base tag '$BASE_TAG' extracted from branch name does not exist."
+              exit 1
+            fi
+          fi
+
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "base_tag=$BASE_TAG" >> "$GITHUB_OUTPUT"
+
+          echo "Resolved hotfix:"
+          echo "  branch=$BRANCH"
+          echo "  base_tag=$BASE_TAG"
+
+
+  # ---------------------------------------------------------------------------
+  # Track the draft release.
+  #
+  # Runs serially per base version, preventing:
+  #
+  #   job A -> determines next ordinal = 4
+  #   job B -> determines next ordinal = 4
+  #
+  # at the same time.
+  # ---------------------------------------------------------------------------
+  track:
+    name: Update hotfix release
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: hotfix-release-${{ needs.prepare.outputs.base_tag }}
+      queue: max
+
+    env:
+      HOTFIX_BRANCH: ${{ needs.prepare.outputs.branch }}
+      BASE_TAG: ${{ needs.prepare.outputs.base_tag }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          fetch-depth: 0
+
+      - name: Fetch refs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags origin
+
+          git fetch --force origin \
+            "${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}"
+
+      - name: Validate lineage and update draft release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BRANCH="$HOTFIX_BRANCH"
+          PREFIX="hotfix-${BASE_TAG}-"
+
+          BASE_SHA="$(
+            git rev-parse "refs/tags/${BASE_TAG}^{commit}"
+          )"
+
+          HEAD_SHA="$(
+            git rev-parse HEAD
+          )"
+
+          # ---------------------------------------------------------------
+          # Base tag must be an ancestor of this branch.
+          # ---------------------------------------------------------------
+          if ! git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA"; then
+            echo "::error::Branch '$BRANCH' does not contain base tag '$BASE_TAG'."
+            exit 1
+          fi
+
+          # ---------------------------------------------------------------
+          # Load all GitHub releases.
+          # ---------------------------------------------------------------
+          RELEASE_PAGES="$RUNNER_TEMP/releases-pages.json"
+          ALL_RELEASES="$RUNNER_TEMP/releases.json"
+
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            > "$RELEASE_PAGES"
+
+          jq -s 'add // []' \
+            "$RELEASE_PAGES" \
+            > "$ALL_RELEASES"
+
+          # ---------------------------------------------------------------
+          # Find:
+          #
+          #   - latest published hotfix for this base
+          #   - active drafts for this base
+          # ---------------------------------------------------------------
+          ACTIVE_DRAFTS=0
+          LATEST_PUBLISHED_N=-1
+          LATEST_PUBLISHED_TAG=""
+
+          while IFS=$'\t' read -r TAG IS_DRAFT; do
+            [[ -z "$TAG" ]] && continue
+
+            if [[ "$TAG" == "$PREFIX"* ]]; then
+              N="${TAG#$PREFIX}"
+
+              if [[ "$N" =~ ^[0-9]+$ ]]; then
+                if [[ "$IS_DRAFT" == "true" ]]; then
+                  ACTIVE_DRAFTS=$((ACTIVE_DRAFTS + 1))
+                elif (( N > LATEST_PUBLISHED_N )); then
+                  LATEST_PUBLISHED_N="$N"
+                  LATEST_PUBLISHED_TAG="$TAG"
+                fi
+              fi
+            fi
+          done < <(
+            jq -r \
+              '.[] | [.tag_name, (.draft | tostring)] | @tsv' \
+              "$ALL_RELEASES"
+          )
+
+          # ---------------------------------------------------------------
+          # If there is an earlier published hotfix, the current branch MUST
+          # contain it.
+          #
+          # This prevents:
+          #
+          #   v0.16.5
+          #      \
+          #       hf1   <- deployed
+          #
+          # then accidentally creating hf2 directly from v0.16.5 and losing hf1.
+          # ---------------------------------------------------------------
+          LATEST_PUBLISHED_SHA=""
+
+          if [[ -n "$LATEST_PUBLISHED_TAG" ]]; then
+            if ! git rev-parse -q --verify \
+              "refs/tags/${LATEST_PUBLISHED_TAG}^{commit}" \
+              >/dev/null; then
+              echo "::error::Published hotfix '$LATEST_PUBLISHED_TAG' has no corresponding Git tag."
+              exit 1
+            fi
+
+            LATEST_PUBLISHED_SHA="$(
+              git rev-parse "refs/tags/${LATEST_PUBLISHED_TAG}^{commit}"
+            )"
+
+            if ! git merge-base --is-ancestor \
+              "$LATEST_PUBLISHED_SHA" \
+              "$HEAD_SHA"; then
+
+              echo "::error::This branch does not contain the latest published hotfix '$LATEST_PUBLISHED_TAG'."
+              echo "::error::Creating another release from it could regress an existing production fix."
+              exit 1
+            fi
+          fi
+
+          # ---------------------------------------------------------------
+          # Detect branches incorrectly created from current trunk.
+          #
+          # Valid:
+          #
+          #   main:
+          #   v0.16.5 ---- A ---- B ---- C
+          #       \
+          #        hotfix
+          #
+          # Invalid:
+          #
+          #   main:
+          #   v0.16.5 ---- A ---- B ---- C
+          #                            \
+          #                             hotfix
+          #
+          # Cherry-picking selected trunk commits is still okay because that
+          # does not advance the Git merge-base.
+          # ---------------------------------------------------------------
+          TRUNK_MERGE_BASE="$(
+            git merge-base HEAD "origin/${DEFAULT_BRANCH}"
+          )"
+
+          MERGE_BASE_ALLOWED=false
+
+          if [[ "$TRUNK_MERGE_BASE" == "$BASE_SHA" ]]; then
+            MERGE_BASE_ALLOWED=true
+          fi
+
+          # If a published hotfix was previously merged back to main while
+          # preserving ancestry, that commit can also legitimately be the
+          # merge-base.
+          if [[ -n "$LATEST_PUBLISHED_SHA" ]] \
+            && [[ "$TRUNK_MERGE_BASE" == "$LATEST_PUBLISHED_SHA" ]]; then
+            MERGE_BASE_ALLOWED=true
+          fi
+
+          if [[ "$MERGE_BASE_ALLOWED" != "true" ]]; then
+            echo "::error::Hotfix branch appears to contain normal trunk history after '$BASE_TAG'."
+            echo "::error::Expected merge-base with '$DEFAULT_BRANCH' to be '$BASE_TAG' or the latest published hotfix."
+            echo "::error::Actual merge-base: $TRUNK_MERGE_BASE"
+            exit 1
+          fi
+
+          # ---------------------------------------------------------------
+          # Each release contains a hidden marker tying it permanently to its
+          # branch.
+          #
+          # This is how later pushes locate the SAME release rather than
+          # allocating a new ordinal every time.
+          # ---------------------------------------------------------------
+          MARKER="<!-- HOTFIX_TRACKER branch=${BRANCH} base=${BASE_TAG} -->"
+
+          MATCHES="$RUNNER_TEMP/matching-releases.json"
+
+          jq \
+            --arg marker "$MARKER" \
+            '[.[] | select((.body // "") | contains($marker))]' \
+            "$ALL_RELEASES" \
+            > "$MATCHES"
+
+          MATCH_COUNT="$(
+            jq 'length' "$MATCHES"
+          )"
+
+          if (( MATCH_COUNT > 1 )); then
+            echo "::error::Multiple releases claim to track branch '$BRANCH'. Manual intervention required."
+            exit 1
+          fi
+
+          NEW_RELEASE=false
+
+          if (( MATCH_COUNT == 1 )); then
+            # -------------------------------------------------------------
+            # Existing hotfix release.
+            # -------------------------------------------------------------
+            HOTFIX_TAG="$(
+              jq -r '.[0].tag_name' "$MATCHES"
+            )"
+
+            RELEASE_ID="$(
+              jq -r '.[0].id' "$MATCHES"
+            )"
+
+            IS_DRAFT="$(
+              jq -r '.[0].draft' "$MATCHES"
+            )"
+
+            if [[ "$IS_DRAFT" != "true" ]]; then
+              echo "::error::Release '$HOTFIX_TAG' has already been published."
+              echo "::error::Published hotfix tags are immutable. Create a new hotfix instead."
+              exit 1
+            fi
+
+            if [[ "$HOTFIX_TAG" != "$PREFIX"* ]]; then
+              echo "::error::Tracked release '$HOTFIX_TAG' does not match expected prefix '$PREFIX'."
+              exit 1
+            fi
+
+            ORDINAL="${HOTFIX_TAG#$PREFIX}"
+
+            if [[ ! "$ORDINAL" =~ ^[0-9]+$ ]]; then
+              echo "::error::Invalid ordinal in tag '$HOTFIX_TAG'."
+              exit 1
+            fi
+
+            # Enforce one active draft release per base version.
+            if (( ACTIVE_DRAFTS > 1 )); then
+              echo "::error::More than one draft hotfix exists for '$BASE_TAG'."
+              echo "::error::This workflow intentionally requires a linear hotfix train."
+              exit 1
+            fi
+
+          else
+            # -------------------------------------------------------------
+            # First push for this branch.
+            #
+            # If some OTHER draft exists for this same base, refuse to create
+            # a parallel hotfix train.
+            # -------------------------------------------------------------
+            if (( ACTIVE_DRAFTS > 0 )); then
+              echo "::error::Another draft hotfix already exists for '$BASE_TAG'."
+              echo "::error::Finish or publish it before creating another."
+              exit 1
+            fi
+
+            NEW_RELEASE=true
+
+            # -------------------------------------------------------------
+            # Find max allocated ordinal from Git tags.
+            #
+            # Example:
+            #
+            #   hotfix-v0.16.5-1
+            #   hotfix-v0.16.5-2
+            #   hotfix-v0.16.5-5
+            #
+            # next = 6
+            #
+            # Gaps are intentionally not reused.
+            # -------------------------------------------------------------
+            MAX_ORDINAL=0
+
+            while IFS= read -r TAG; do
+              [[ -z "$TAG" ]] && continue
+
+              N="${TAG#$PREFIX}"
+
+              if [[ "$N" =~ ^[0-9]+$ ]]; then
+                if (( N > MAX_ORDINAL )); then
+                  MAX_ORDINAL="$N"
+                fi
+              fi
+            done < <(
+              git tag -l "${PREFIX}*"
+            )
+
+            ORDINAL=$((MAX_ORDINAL + 1))
+            HOTFIX_TAG="${PREFIX}${ORDINAL}"
+
+            echo "Allocating new hotfix tag:"
+            echo "  $HOTFIX_TAG"
+
+            # -------------------------------------------------------------
+            # Create the provisional tag ourselves BEFORE creating the GitHub
+            # release.
+            #
+            # This is intentional:
+            # gh release create is told to --verify-tag, so GitHub never
+            # guesses which commit should receive the tag.
+            # -------------------------------------------------------------
+            git tag "$HOTFIX_TAG" "$HEAD_SHA"
+
+            git push origin \
+              "refs/tags/${HOTFIX_TAG}:refs/tags/${HOTFIX_TAG}"
+          fi
+
+          # ---------------------------------------------------------------
+          # While the release is still a DRAFT, keep its provisional tag
+          # aligned to branch HEAD.
+          #
+          # Once the release is published, the workflow above refuses further
+          # changes.
+          # ---------------------------------------------------------------
+          CURRENT_TAG_SHA="$(
+            git rev-parse \
+              "refs/tags/${HOTFIX_TAG}^{commit}" \
+              2>/dev/null || true
+          )"
+
+          if [[ "$CURRENT_TAG_SHA" != "$HEAD_SHA" ]]; then
+            echo "Moving draft tag:"
+            echo "  $HOTFIX_TAG"
+            echo "  $CURRENT_TAG_SHA -> $HEAD_SHA"
+
+            git tag -f "$HOTFIX_TAG" "$HEAD_SHA"
+
+            git push --force origin \
+              "refs/tags/${HOTFIX_TAG}:refs/tags/${HOTFIX_TAG}"
+          fi
+
+          # ---------------------------------------------------------------
+          # Generate cumulative commits:
+          #
+          #   BASE_TAG..HEAD
+          #
+          # Every push completely regenerates this section from Git rather
+          # than trying to maintain incremental state.
+          # ---------------------------------------------------------------
+          GENERATED="$RUNNER_TEMP/generated-commits.md"
+
+          {
+            echo '<!-- HOTFIX_COMMITS_START -->'
+            echo
+            echo '## Commits'
+            echo
+            echo "_Cumulative changes from \`${BASE_TAG}\` to current hotfix HEAD \`${HEAD_SHA:0:7}\`._"
+            echo
+
+            mapfile -t COMMITS < <(
+              git rev-list \
+                --reverse \
+                --topo-order \
+                "${BASE_TAG}..HEAD"
+            )
+
+            if (( ${#COMMITS[@]} == 0 )); then
+              echo "_No hotfix commits yet._"
+              echo
+            else
+              INDEX=0
+
+              for SHA in "${COMMITS[@]}"; do
+                INDEX=$((INDEX + 1))
+
+                SHORT_SHA="$(
+                  git rev-parse --short=7 "$SHA"
+                )"
+
+                SUBJECT="$(
+                  git show -s --format='%s' "$SHA"
+                )"
+
+                AUTHOR="$(
+                  git show -s --format='%an' "$SHA"
+                )"
+
+                BODY="$(
+                  git show -s --format='%b' "$SHA"
+                )"
+
+                COMMIT_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${SHA}"
+
+                printf '### %d. [`%s`](%s) - %s\n\n' \
+                  "$INDEX" \
+                  "$SHORT_SHA" \
+                  "$COMMIT_URL" \
+                  "$SUBJECT"
+
+                printf '**Author:** %s\n\n' "$AUTHOR"
+
+                # Quote commit bodies so a commit message cannot accidentally
+                # masquerade as one of our machine markers.
+                if [[ -n "${BODY//[[:space:]]/}" ]]; then
+                  printf '%s\n' "$BODY" \
+                    | sed 's/^/> /'
+
+                  echo
+                fi
+              done
+            fi
+
+            echo '<!-- HOTFIX_COMMITS_END -->'
+          } > "$GENERATED"
+
+          # ---------------------------------------------------------------
+          # CREATE new release.
+          # ---------------------------------------------------------------
+          if [[ "$NEW_RELEASE" == "true" ]]; then
+            FINAL_BODY="$RUNNER_TEMP/release-body.md"
+
+            if [[ -n "$LATEST_PUBLISHED_TAG" ]]; then
+              PREVIOUS_DISPLAY="\`${LATEST_PUBLISHED_TAG}\`"
+            else
+              PREVIOUS_DISPLAY="_none_"
+            fi
+
+            cat > "$FINAL_BODY" <<EOF
+          **Base release:** \`${BASE_TAG}\`
+
+          **Hotfix branch:** \`${BRANCH}\`
+
+          **Previous published hotfix:** ${PREVIOUS_DISPLAY}
+
+          ## Deployed to
+
+          - [ ] Production
+          - [ ] Staging
+
+          ---
+
+          ## Overview
+
+          <!-- Fill this section in manually. It is preserved on every push. -->
+
+          ---
+
+          EOF
+
+            cat "$GENERATED" >> "$FINAL_BODY"
+
+            {
+              echo
+              echo "$MARKER"
+            } >> "$FINAL_BODY"
+
+            SLUG="${BRANCH#hotfix/${BASE_TAG}-}"
+            TITLE_SUMMARY="${SLUG//-/ }"
+
+            RELEASE_TITLE="Hotfix ${BASE_TAG} #${ORDINAL} - ${TITLE_SUMMARY}"
+
+            # --verify-tag is deliberate. The tag has already been created
+            # above at the exact commit we want.
+            gh release create "$HOTFIX_TAG" \
+              --verify-tag \
+              --draft \
+              --title "$RELEASE_TITLE" \
+              --notes-file "$FINAL_BODY"
+
+          else
+            # -------------------------------------------------------------
+            # UPDATE existing release.
+            #
+            # Preserve:
+            #
+            #   - deployment checkboxes
+            #   - Overview
+            #   - any other human edits
+            #
+            # Replace ONLY:
+            #
+            #   HOTFIX_COMMITS_START
+            #       ...
+            #   HOTFIX_COMMITS_END
+            # -------------------------------------------------------------
+            CURRENT_BODY="$RUNNER_TEMP/current-body.md"
+            FINAL_BODY="$RUNNER_TEMP/release-body.md"
+
+            jq -r \
+              '.[0].body // ""' \
+              "$MATCHES" \
+              > "$CURRENT_BODY"
+
+            START_MARKER_COUNT="$(
+              grep -cFx \
+                '<!-- HOTFIX_COMMITS_START -->' \
+                "$CURRENT_BODY" \
+                || true
+            )"
+
+            END_MARKER_COUNT="$(
+              grep -cFx \
+                '<!-- HOTFIX_COMMITS_END -->' \
+                "$CURRENT_BODY" \
+                || true
+            )"
+
+            if [[ "$START_MARKER_COUNT" -ne 1 ]] \
+              || [[ "$END_MARKER_COUNT" -ne 1 ]]; then
+
+              echo "::error::Release '$HOTFIX_TAG' is missing its generated-section markers."
+              echo "::error::Refusing to overwrite human-authored release notes."
+              exit 1
+            fi
+
+            awk \
+              -v generated="$GENERATED" \
+              '
+                $0 == "<!-- HOTFIX_COMMITS_START -->" {
+                  while ((getline line < generated) > 0) {
+                    print line
+                  }
+
+                  close(generated)
+                  skipping = 1
+                  next
+                }
+
+                $0 == "<!-- HOTFIX_COMMITS_END -->" {
+                  skipping = 0
+                  next
+                }
+
+                !skipping {
+                  print
+                }
+              ' \
+              "$CURRENT_BODY" \
+              > "$FINAL_BODY"
+
+            gh release edit "$HOTFIX_TAG" \
+              --notes-file "$FINAL_BODY"
+          fi
+
+          # ---------------------------------------------------------------
+          # Action run summary.
+          # ---------------------------------------------------------------
+          RELEASE_URL="$(
+            gh release view "$HOTFIX_TAG" \
+              --json url \
+              --jq '.url'
+          )"
+
+          {
+            echo "## Hotfix release"
+            echo
+            echo "- **Base:** \`$BASE_TAG\`"
+            echo "- **Branch:** \`$BRANCH\`"
+            echo "- **Tag:** \`$HOTFIX_TAG\`"
+            echo "- **HEAD:** \`${HEAD_SHA:0:7}\`"
+            echo "- **Release:** [$HOTFIX_TAG]($RELEASE_URL)"
+            echo
+            echo "The release remains a **draft** until a developer publishes it."
+          } >> "$GITHUB_STEP_SUMMARY"

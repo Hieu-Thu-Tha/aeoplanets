@@ -1,0 +1,120 @@
+Core architecture
+
+Style, modular monolith to start, hexagonal ports and adapters, event driven inside the boundary
+
+Cloud, Azure UK South, UK West for DR, Private Link on data services, Key Vault for secrets
+
+Runtime, Kubernetes (AKS), KEDA for autoscale, NGINX ingress, cert-manager
+
+Languages
+
+Backend, TypeScript on Node 20, NestJS, CQRS modules
+
+Workers, Python 3.12 for capture and NLP, FastAPI for internal tools
+
+Data
+
+OLTP, PostgreSQL 16 (Azure Flexible Server), schema per tenant or row level security
+
+OLAP, BigQuery or Azure Synapse Serverless, start with ClickHouse if you want speed and control
+
+Cache, Redis Enterprise, separate cluster for queues and caching
+
+Search and vector, OpenSearch for text, pgvector or Qdrant for embeddings
+
+Object storage, Azure Blob, immutable containers for evidence snapshots
+
+Queues and events, Azure Service Bus, outbox pattern from Postgres, protobuf event contracts
+
+Observability
+
+OpenTelemetry everywhere, Grafana LGTM stack, Sentry for FE and BE, Loki for logs
+
+Synthetic checks with k6 and Playwright
+
+Security and auth
+
+SSO, OIDC via Auth0 or Entra ID, SCIM for user provisioning
+
+RBAC, org, project, environment scopes, policy engine via OpenFGA
+
+PII boundary, separate schema, encryption at rest with CMK, field-level AES-GCM
+
+GDPR controls, data subject search, export, delete, immutable audit trail
+
+AI
+
+Prompt runner adapters, OpenAI, Anthropic, Vertex, Bing, local for tests
+
+NLP pipeline, spaCy + rapid claims extractor, contradiction checks with small LLM
+
+Embeddings, text-embedding-3 large, cache embeddings by doc hash
+
+DevEx
+
+Monorepo with Turborepo, PNPM, changesets for versioning
+
+CI/CD, GitHub Actions, OPA policy checks, Trivy image scan, Dagger pipelines to AKS
+
+IaC, Terraform + Terragrunt, separate live and modules repos
+
+Frontend kit, app and marketing
+
+Framework, Next.js 15, React Server Components, App Router
+
+Design system
+
+Tailwind, shadcn/ui, Radix primitives, Framer Motion micro-interactions
+
+Theming, CSS variables with light, dark, high-contrast, tokenised spacing and radii
+
+Charts, Recharts for app, Spline or Lottie for hero motion on site
+
+CMS for site, Contentlayer to start, upgrade to Sanity if editorial expands
+
+Docs, Mintlify or Nextra docs theme, same brand tokens
+
+Iconography, Lucide + custom set
+
+Accessibility, axe CI, keyboard focus states, prefers-reduced-motion variants
+
+2) Payments, mock now, real later
+Goal
+
+Ship billing flows day one without committing to a gateway. Swap-in Stripe, Adyen, or Paddle later with no UI churn.
+
+Approach
+
+Domain, BillingPort interface in BE, BillingClient in FE
+
+Contract
+
+createCustomer(orgId)
+
+createSubscription(orgId, planId, trialDays?)
+
+updatePaymentMethod(orgId, paymentToken)
+
+issueInvoice(orgId, amount, currency, meta)
+
+cancelSubscription(orgId, atPeriodEnd)
+
+webhook(event)
+
+Mock provider
+
+In-memory then Postgres tables, deterministic “test cards”
+
+Webhook simulator UI to fire invoice.paid, invoice.payment_failed, subscription.updated
+
+Frontend uses Payment Element shim that returns a paymentToken from a fake iframe, later replaced by Stripe Elements
+
+Swap
+
+Drop in StripeAdapter implementing BillingPort
+
+Map mock events to Stripe event types in one place
+
+Metering
+
+Usage records from events bus aggregated nightly, per seat and per prompt job

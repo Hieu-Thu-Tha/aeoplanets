@@ -1,0 +1,26 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ZlU6dZbCMqeTeGx9MJbut"
+uri = "file://docs/01-architecture-overview.md"
+type = "text"
+title = "Architecture Overview"
+
+[[outputs]]
+id = "eNgFnJAKuYoQOHALVTxun"
+uri = "file://docs/02-data-flow-diagram.md"
+type = "text"
+title = "Data Flow Diagram"
+
+[[outputs]]
+id = "Kws1Ooc024K7QiiuwBFEW"
+uri = "file://docs/03-third-party-dependencies.md"
+type = "text"
+title = "Third-Party Dependency List"
+
+[[outputs]]
+id = "Exxm1udLAe5aZxpZrKXmX"
+uri = "file://docs/04-known-limitations-and-risks.md"
+type = "text"
+title = "Known Limitations & Risks"

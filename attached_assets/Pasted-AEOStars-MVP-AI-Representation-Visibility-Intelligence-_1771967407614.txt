@@ -1,0 +1,486 @@
+AEOStars MVP
+
+AI Representation & Visibility Intelligence Platform
+
+⸻
+
+1. Onboarding & Initial Assessment
+
+What It Does
+
+Captures:
+	•	Domain
+	•	2–3 core competitors
+	•	Category keywords
+	•	Optional: target audience description
+	•	Brand positioning statement
+
+Then runs a baseline AI perception scan.
+
+⸻
+
+UI
+
+Screen: “Let’s See What AI Thinks About You”
+
+Minimal.
+
+Fields:
+	•	Domain input
+	•	Competitor domains
+	•	“What category are you in?”
+	•	“What problem do you solve?”
+
+CTA:
+Run AI Assessment
+
+⸻
+
+Data Processing
+
+Baseline AI scan should run asynchronous.
+
+Reason:
+	•	You will be querying multiple LLMs
+	•	Running prompt batches
+	•	Extracting structured insights
+
+User sees:
+Progress indicator:
+“Scanning AI models… Analysing narrative… Comparing competitors…”
+
+Initial report ready within 5–10 minutes.
+
+⸻
+
+Report Output
+
+AI Snapshot Report
+	•	200-word AI-generated brand summary
+	•	Top 5 themes AI associates with brand
+	•	Missing themes competitors have
+	•	Sentiment indicator
+	•	Presence score
+
+This is the hook.
+
+⸻
+
+2. AI Visibility Monitoring Engine
+
+This is the core.
+
+⸻
+
+What It Does
+
+Tracks brand appearance across:
+
+Prompt Types:
+	•	Brand direct queries
+	•	Category comparison queries
+	•	Commercial intent queries
+	•	Problem-based queries
+
+Example:
+“Best marketing automation platforms for UK SMEs”
+“Alternatives to X”
+“Who is the leader in Y”
+
+Stores:
+	•	Brand mentioned or not
+	•	Position in response
+	•	Sentiment
+	•	Competitors included
+	•	Citation present or not
+
+⸻
+
+UI
+
+Dashboard: AI Visibility Overview
+
+Top section:
+	•	AI Share of Voice %
+	•	Commercial Recommendation Score
+	•	Category Authority Score
+	•	Trend graph (last 30 days)
+
+Middle section:
+	•	Prompt categories filter
+	•	Model filter
+	•	Time filter
+
+Lower section:
+Table view:
+Prompt | Appeared? | Position | Competitors | Sentiment | Citation
+
+Clean. Analytical. No noise.
+
+⸻
+
+Data Processing
+
+Two layers:
+	1.	Daily asynchronous scheduled runs
+	2.	Manual “Run Prompt Test” button
+
+Scheduled runs ensure monitoring continuity.
+Manual allows user experimentation.
+
+⸻
+
+3. AI Perception Mirror
+
+This is powerful and emotionally impactful.
+
+⸻
+
+What It Does
+
+Generates:
+
+“What AI believes about your company.”
+
+Includes:
+	•	Positioning summary
+	•	Strength signals
+	•	Weakness signals
+	•	Inferred audience
+	•	Market tier assumption
+	•	Confusion markers
+
+⸻
+
+UI
+
+Dedicated tab:
+AI Narrative Profile
+
+Left side:
+AI-generated summary
+
+Right side:
+Structured breakdown:
+
+Positioning clarity score
+Authority depth score
+Proof strength score
+Differentiation clarity score
+
+Below:
+“Top 5 Improvements to Increase Inclusion”
+
+⸻
+
+Data Processing
+
+Runs asynchronously during onboarding.
+Updates weekly.
+
+Can also be manually refreshed.
+
+⸻
+
+4. Semantic Coverage Gap Analysis
+
+Practical. Not over-engineered.
+
+⸻
+
+What It Does
+
+Compares:
+
+Your site vs competitors on:
+	•	Topic clusters
+	•	Entity mentions
+	•	Structured data usage
+	•	FAQ presence
+	•	Comparison page presence
+
+Outputs:
+
+Missing topic clusters
+Missing commercial intent pages
+Missing FAQ structures
+
+⸻
+
+UI
+
+Coverage Gap Screen
+
+Visual:
+
+Topic Map View:
+Clusters shown as circles.
+Green = strong coverage.
+Red = weak.
+Grey = competitor-owned.
+
+Table view below:
+Topic | You | Competitor A | Competitor B | Gap severity
+
+Action column:
+“Recommended Action”
+
+⸻
+
+Data Processing
+
+Runs asynchronously weekly.
+
+Manual refresh available.
+
+⸻
+
+5. Structured Data & Machine Readability Audit
+
+Keep this simple in MVP.
+
+⸻
+
+What It Does
+
+Checks:
+	•	Organisation schema
+	•	FAQ schema
+	•	Article schema
+	•	Author schema
+	•	Internal link structure
+	•	Canonical consistency
+
+Outputs:
+Machine Readability Score (0–100)
+
+⸻
+
+UI
+
+Simple technical audit panel:
+
+Score circle at top.
+
+Checklist below:
+
+Schema coverage
+Internal linking depth
+FAQ presence
+Comparison page presence
+Structured summary presence
+
+Each with:
+Status + Fix suggestion
+
+⸻
+
+Data Processing
+
+On-demand scan.
+
+No need for constant polling.
+
+⸻
+
+6. Competitor AI Positioning Map
+
+This differentiates you.
+
+⸻
+
+What It Does
+
+Shows:
+
+Where competitors appear in AI answers and you do not.
+
+Visualises:
+Prompt | Competitor | Position | Sentiment | Narrative used
+
+This exposes positioning strategy gaps.
+
+⸻
+
+UI
+
+Side-by-side comparison layout:
+
+Prompt on left.
+
+AI response snippet in middle.
+
+Highlighted mentions.
+
+Competitor badges.
+
+Below:
+“Why they appeared” analysis.
+
+⸻
+
+Data Processing
+
+Runs alongside visibility engine asynchronously.
+
+⸻
+
+7. Change Monitoring
+
+This is subtle but valuable.
+
+⸻
+
+What It Does
+
+Tracks:
+	•	New competitor appearing in answers
+	•	You disappearing
+	•	Sentiment change
+	•	Model behaviour shift
+
+Triggers:
+Alert notifications.
+
+⸻
+
+UI
+
+Alert centre.
+
+Change feed:
+
+“Competitor X now appears for ‘Best CRM for B2B’ where you previously did.”
+
+⸻
+
+Data Processing
+
+Daily async background job.
+
+⸻
+
+Reporting Layer
+
+You need three report types.
+
+⸻
+
+1. Executive Snapshot Report (PDF)
+
+Monthly export.
+
+Includes:
+	•	AI Share of Voice trend
+	•	Category authority shift
+	•	Key wins
+	•	Key losses
+	•	Top 5 actions
+
+Designed for CMO / CEO.
+
+⸻
+
+2. Marketing Action Report
+
+Detailed:
+	•	Pages to create
+	•	FAQs to add
+	•	Comparison pages missing
+	•	Messaging rewrites suggested
+
+Tactical.
+
+⸻
+
+3. Competitive Intelligence Report
+
+Focused on:
+	•	Where competitors dominate
+	•	What claims AI repeats about them
+	•	Which phrases correlate with inclusion
+
+Strategic.
+
+⸻
+
+How the App Works in Summary
+	1.	User enters domain
+	2.	Platform runs multi-model AI interrogation
+	3.	Results stored in structured format
+	4.	Scores calculated
+	5.	Narrative generated
+	6.	Gap analysis performed
+	7.	Recommendations produced
+	8.	Continuous monitoring runs in background
+
+The value is:
+
+Clarity + Diagnosis + Direction.
+
+⸻
+
+Core User Stories
+
+⸻
+
+Marketing Manager
+
+“I want to know if AI is recommending my competitors instead of us.”
+
+Sees:
+Visibility dashboard
+Competitor presence map
+Clear action list
+
+⸻
+
+CMO
+
+“I want to know if we are strategically exposed.”
+
+Sees:
+Authority score
+Trend lines
+Executive PDF
+
+⸻
+
+Founder
+
+“I want to know what AI thinks our business is.”
+
+Sees:
+Narrative mirror
+Weakness signals
+Clear positioning gaps
+
+⸻
+
+SEO Lead
+
+“I want practical tasks, not theory.”
+
+Sees:
+FAQ suggestions
+Comparison page prompts
+Schema gaps
+Entity expansion list
+
+⸻
+
+What MVP Should NOT Do
+
+Do not:
+	•	Try to crawl entire web
+	•	Over-engineer NLP visualisations
+	•	Build custom model infrastructure
+	•	Add MCP integrations
+	•	Add APIs
+
+That’s v2.
+
+MVP proves:
+	•	AI representation is measurable
+	•	AI inclusion can be influenced
+	•	Strategic clarity increases presence

@@ -1,0 +1,97 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1785837527150,
+      "tag": "0000_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785837650766,
+      "tag": "0001_ai-usage-and-system-config",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786296102594,
+      "tag": "0002_per_account_trial_entitlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786378296097,
+      "tag": "0003_provisioned_trial_plan",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787074440017,
+      "tag": "0004_ai_usage_cache_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787127923162,
+      "tag": "0005_ai_job_quota_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787158172543,
+      "tag": "0006_ai_cost_estimation",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787198408667,
+      "tag": "0007_scheduled_ai_quota_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787243054962,
+      "tag": "0008_generic_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787285988222,
+      "tag": "0009_user_seen_welcome_video",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787769872590,
+      "tag": "0010_replace_openai_search_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789115200000,
+      "tag": "0011_add_perplexity_sonar_pricing",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788254452721,
+      "tag": "0012_ai_usage_meters",
+      "breakpoints": true
+    }
+  ]
+}

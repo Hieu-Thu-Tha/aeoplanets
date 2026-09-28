@@ -1,0 +1,21 @@
+[Unit]
+Description=Aeostars Staging Webhook Receiver
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=fra
+Group=fra
+EnvironmentFile=/srv/alpon/secrets/aeostars-staging-webhook.env
+ExecStart=/usr/bin/python3 /usr/local/bin/aeostars-staging-webhook.py 4126
+Restart=always
+RestartSec=5s
+PrivateTmp=true
+ProtectHome=false
+ProtectSystem=full
+ReadWritePaths=/run /srv/alpon/data /var/run/docker.sock
+
+[Install]
+WantedBy=multi-user.target

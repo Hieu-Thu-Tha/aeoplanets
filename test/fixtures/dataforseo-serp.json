@@ -1,0 +1,279 @@
+{
+  "aiModeSuccess": {
+    "version": "0.1.fixture",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "tasks_count": 1,
+    "tasks_error": 0,
+    "tasks": [
+      {
+        "id": "fixture-ai-mode-task",
+        "status_code": 20000,
+        "status_message": "Ok.",
+        "cost": 0.004,
+        "result_count": 1,
+        "result": [
+          {
+            "keyword": "best project management tools",
+            "type": "ai_mode",
+            "location_code": 1006886,
+            "language_code": "en",
+            "check_url": "https://www.google.com/search?q=best+project+management+tools&udm=50",
+            "datetime": "2026-09-24 12:00:00 +00:00",
+            "item_types": ["ai_overview"],
+            "items_count": 1,
+            "items": [
+              {
+                "type": "ai_overview",
+                "rank_group": 1,
+                "rank_absolute": 1,
+                "markdown": "**Alpha** is a strong option.[[1]](https://alpha.example/review)\n\nBeta suits smaller teams.",
+                "items": [
+                  {
+                    "type": "ai_overview_element",
+                    "title": null,
+                    "text": "Alpha is a strong option.",
+                    "markdown": "**Alpha** is a strong option.[[1]](https://alpha.example/review)",
+                    "references": [
+                      {
+                        "type": "ai_overview_reference",
+                        "source": "Alpha Review",
+                        "domain": "alpha.example",
+                        "url": "https://alpha.example/review",
+                        "title": "Alpha review",
+                        "text": "Independent Alpha review."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "ai_overview_element",
+                    "title": null,
+                    "text": "Beta suits smaller teams.",
+                    "markdown": "Beta suits smaller teams.",
+                    "references": [
+                      {
+                        "type": "ai_overview_reference",
+                        "source": "Alpha Review",
+                        "domain": "alpha.example",
+                        "url": "https://alpha.example/review",
+                        "title": "Alpha review",
+                        "text": "Independent Alpha review."
+                      },
+                      {
+                        "type": "ai_overview_reference",
+                        "source": "Beta Guide",
+                        "domain": "beta.example",
+                        "url": "https://beta.example/guide",
+                        "title": null,
+                        "text": null
+                      }
+                    ]
+                  }
+                ],
+                "references": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "aiOverviewSuccess": {
+    "version": "0.1.fixture",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "tasks_count": 1,
+    "tasks_error": 0,
+    "tasks": [
+      {
+        "id": "fixture-ai-overview-task",
+        "status_code": 20000,
+        "status_message": "Ok.",
+        "cost": 0.005,
+        "result_count": 1,
+        "result": [
+          {
+            "keyword": "how to change a tire",
+            "type": "organic",
+            "location_code": 2840,
+            "language_code": "en",
+            "check_url": "https://www.google.com/search?q=how+to+change+a+tire",
+            "datetime": "2026-09-24 12:05:00 +00:00",
+            "item_types": ["ai_overview", "organic"],
+            "items_count": 2,
+            "items": [
+              {
+                "type": "ai_overview",
+                "rank_group": 1,
+                "rank_absolute": 1,
+                "asynchronous_ai_overview": true,
+                "markdown": "Park safely, then loosen the lug nuts.[[1]](https://tires.example/change)",
+                "items": [
+                  {
+                    "type": "ai_overview_element",
+                    "text": "Park safely, then loosen the lug nuts.",
+                    "markdown": "Park safely, then loosen the lug nuts.[[1]](https://tires.example/change)",
+                    "references": [
+                      {
+                        "type": "ai_overview_reference",
+                        "source": "Tire Guide",
+                        "domain": "tires.example",
+                        "url": "https://tires.example/change",
+                        "title": "How to change a tire",
+                        "text": "A safe step-by-step tire guide."
+                      }
+                    ]
+                  }
+                ],
+                "references": [
+                  {
+                    "type": "ai_overview_reference",
+                    "source": "Tire Guide",
+                    "domain": "tires.example",
+                    "url": "https://tires.example/change",
+                    "title": "How to change a tire",
+                    "text": "A safe step-by-step tire guide."
+                  }
+                ]
+              },
+              {
+                "type": "organic",
+                "url": "https://organic.example/result",
+                "title": "Ordinary organic result"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "aiOverviewKnowledgeGraphSuccess": {
+    "version": "0.1.fixture",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "tasks_count": 1,
+    "tasks_error": 0,
+    "tasks": [
+      {
+        "id": "fixture-knowledge-graph-overview-task",
+        "status_code": 20000,
+        "status_message": "Ok.",
+        "cost": 0.005,
+        "result_count": 1,
+        "result": [
+          {
+            "keyword": "history of apple pie",
+            "type": "organic",
+            "location_code": 2840,
+            "language_code": "en",
+            "check_url": "https://www.google.com/search?q=history+of+apple+pie",
+            "datetime": "2026-09-24 12:07:00 +00:00",
+            "item_types": ["knowledge_graph"],
+            "items_count": 1,
+            "items": [
+              {
+                "type": "knowledge_graph",
+                "items": [
+                  {
+                    "type": "knowledge_graph_ai_overview_item",
+                    "rank_group": 0,
+                    "rank_absolute": 0,
+                    "asynchronous_ai_overview": false,
+                    "items": [
+                      {
+                        "type": "ai_overview_element",
+                        "text": "Apple pie became associated with American identity.",
+                        "markdown": null,
+                        "references": null
+                      }
+                    ],
+                    "references": [
+                      {
+                        "type": "ai_overview_reference",
+                        "source": "Food History",
+                        "domain": "food.example",
+                        "url": "https://food.example/apple-pie",
+                        "title": "The history of apple pie",
+                        "text": "How apple pie became an American symbol."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "aiOverviewAbsent": {
+    "version": "0.1.fixture",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "tasks_count": 1,
+    "tasks_error": 0,
+    "tasks": [
+      {
+        "id": "fixture-no-overview-task",
+        "status_code": 20000,
+        "status_message": "Ok.",
+        "cost": 0.003,
+        "result_count": 1,
+        "result": [
+          {
+            "keyword": "query without an overview",
+            "type": "organic",
+            "location_code": 1006886,
+            "language_code": "en",
+            "check_url": "https://www.google.com/search?q=query+without+an+overview",
+            "datetime": "2026-09-24 12:10:00 +00:00",
+            "item_types": ["organic"],
+            "items_count": 1,
+            "items": [
+              {
+                "type": "organic",
+                "url": "https://organic.example/only-result",
+                "title": "Organic result only"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "malformedBody": {
+    "version": "0.1.fixture",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "tasks_count": 1,
+    "tasks_error": 0,
+    "tasks": {
+      "private_payload": "DO_NOT_LEAK"
+    }
+  },
+  "topLevelError": {
+    "version": "0.1.fixture",
+    "status_code": 40100,
+    "status_message": "Authentication failed.",
+    "tasks_count": 0,
+    "tasks_error": 0,
+    "tasks": null
+  },
+  "taskError": {
+    "version": "0.1.fixture",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "tasks_count": 1,
+    "tasks_error": 1,
+    "tasks": [
+      {
+        "id": "fixture-failed-task",
+        "status_code": 40501,
+        "status_message": "Task failed safely.",
+        "cost": 0,
+        "result_count": 0,
+        "result": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+@aeostars_staging_control {
+  host aeostars-stg.alpon.xyz
+  path /_deploy/webhook /_deploy/status
+}
+handle @aeostars_staging_control {
+  reverse_proxy 127.0.0.1:4126
+}

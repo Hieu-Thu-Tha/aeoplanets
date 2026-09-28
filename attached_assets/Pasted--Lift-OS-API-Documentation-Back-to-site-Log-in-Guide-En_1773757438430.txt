@@ -1,0 +1,855 @@
+
+
+Lift-OS
+/API Documentation
+Back to site
+Log in
+
+Guide
+
+Endpoints
+Lift-OS API Reference
+
+The Lift-OS REST API gives you programmatic access to contacts, companies, deals, leads, and knowledge base articles in your workspace. Build integrations, sync data with external systems, and automate your revenue operations.
+Base URL
+https://lift-os.com/api/v1
+Versioning
+
+The API is versioned via the URL path. The current version is v1. All endpoints are prefixed with /api/v1/. When breaking changes are introduced, a new version will be released while the previous version remains available.
+Response Format
+
+All responses are JSON. Successful responses wrap data in a data field. List endpoints include a meta object with pagination info. All timestamps are ISO 8601 format.
+json
+
+{
+  "data": { ... },
+  "meta": {
+    "next_cursor": 42,
+    "has_more": true,
+    "total": 150
+  }
+}
+
+Authentication
+
+Authenticate requests by including your API key in the X-API-Key header, or as a Bearer token in the Authorization header.
+bash
+
+# Using X-API-Key header
+curl -H "X-API-Key: sk_live_your_api_key_here" \
+  https://lift-os.com/api/v1/contacts
+
+# Using Authorization header
+curl -H "Authorization: Bearer sk_live_your_api_key_here" \
+  https://lift-os.com/api/v1/contacts
+
+Generating API Keys
+
+API keys are created in Settings → API → Keys. Each key has configurable scopes (e.g. contacts:read, deals:write) that control which endpoints it can access. The full key is shown only once at creation — store it securely.
+Security Best Practices
+
+    Never expose API keys in client-side code or public repositories
+    Use environment variables to store keys
+    Grant only the minimum scopes required
+    Rotate keys periodically and revoke unused keys
+    Use separate keys for different integrations
+
+Rate Limiting
+
+API requests are rate limited to 1,000 requests per hour per API key (configurable). Rate limit information is included in every response via headers.
+Header	Description
+X-RateLimit-Limit	Maximum requests allowed per window
+X-RateLimit-Remaining	Requests remaining in current window
+X-RateLimit-Reset	Unix timestamp when the window resets
+Retry-After	Seconds to wait before retrying (only on 429)
+
+When rate limited, the API returns a 429 status:
+json
+
+{
+  "error": {
+    "code": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Please retry after the specified time."
+  }
+}
+
+Implement exponential backoff in your client. Respect the Retry-After header to determine when to retry.
+Pagination
+
+List endpoints use cursor-based pagination. Pass the cursor parameter with the ID of the last record from the previous page.
+Parameter	Type	Required	Description
+limit	integer	optional	Number of records per page (default 25, max 100)
+cursor	integer	optional	ID of the last record from the previous page
+bash
+
+# First page
+curl -H "X-API-Key: sk_live_..." "https://lift-os.com/api/v1/contacts?limit=10"
+
+# Next page (use next_cursor from previous response)
+curl -H "X-API-Key: sk_live_..." "https://lift-os.com/api/v1/contacts?limit=10&cursor=42"
+
+The response meta object indicates if more records are available:
+json
+
+{
+  "data": [...],
+  "meta": {
+    "next_cursor": 52,
+    "has_more": true,
+    "total": 150
+  }
+}
+
+Filtering
+
+Use query parameters to filter and sort results on list endpoints.
+Parameter	Type	Required	Description
+updated_after	ISO 8601	optional	Only return records updated after this timestamp
+created_after	ISO 8601	optional	Only return records created after this timestamp
+sort	string	optional	Field to sort by (e.g. createdAt, updatedAt, lastName)
+order	string	optional	Sort direction: asc or desc (default: desc)
+bash
+
+# Get contacts updated in the last 24 hours, sorted by last name
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/contacts?updated_after=2024-01-15T00:00:00Z&sort=lastName&order=asc"
+
+Field Selection
+
+Reduce payload size by requesting only the fields you need with the fields parameter. The id field is always included.
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/contacts?fields=id,email,firstName,lastName"
+
+json
+
+{
+  "data": [
+    { "id": 1, "email": "jane@example.com", "firstName": "Jane", "lastName": "Doe" },
+    { "id": 2, "email": "john@example.com", "firstName": "John", "lastName": "Smith" }
+  ],
+  "meta": { "next_cursor": null, "has_more": false, "total": 2 }
+}
+
+Expanding Relations
+
+Embed related objects in responses using the expand parameter. Multiple relations can be separated by commas.
+Endpoint	Available Expansions
+/contacts	company
+/contacts/:id	company, deals
+/companies/:id	contacts
+/deals, /deals/:id	company, contacts, stage, pipeline
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/deals/5?expand=company,stage,pipeline"
+
+Webhooks
+
+Receive real-time notifications when data changes in your workspace. Configure webhook URLs via Settings → API → Webhooks or the internal API.
+Supported Events
+contact.createdcontact.updatedcontact.deletedcompany.createdcompany.updatedcompany.deleteddeal.createddeal.updateddeal.wondeal.lostdeal.stage_changedlead.createdlead.updatedlead.deleted
+Payload Format
+
+Each webhook delivery is a POST request with JSON body containing the event type, timestamp, and data. Two headers are included for verification and identification.
+Header	Description
+X-LiftOS-Signature	HMAC-SHA256 hex digest of the request body
+X-LiftOS-Event	The event type (e.g. contact.created)
+json
+
+{
+  "event": "contact.created",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "data": {
+    "id": 42,
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "email": "jane@example.com",
+    "companyId": 7
+  }
+}
+
+Signature Verification
+
+Verify webhook signatures to ensure payloads are authentic. The signature is an HMAC-SHA256 digest of the raw request body using your webhook secret.
+javascript
+
+const crypto = require("crypto");
+
+function verifyWebhookSignature(body, signature, secret) {
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(body)
+    .digest("hex");
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected)
+  );
+}
+
+Retry Policy
+
+Failed deliveries are retried up to 3 times with exponential backoff (1s, 5s, 25s). After 10 consecutive failures, the webhook is automatically disabled. You can re-enable it in Settings.
+Contacts
+
+Manage contact records in your workspace. Requires contacts:read or contacts:write scopes.
+GET
+/api/v1/contacts
+
+List all contacts with cursor-based pagination.
+Parameter	Type	Required	Description
+email	string	optional	Filter by exact email address
+search	string	optional	Search across name and email fields
+company_id	integer	optional	Filter by company ID
+updated_after	ISO 8601	optional	Filter by update timestamp
+created_after	ISO 8601	optional	Filter by creation timestamp
+sort	string	optional	Sort field: createdAt, updatedAt, lastName
+order	string	optional	Sort direction: asc or desc
+fields	string	optional	Comma-separated fields to return
+expand	string	optional	Expand: company
+limit	integer	optional	Records per page (default 25, max 100)
+cursor	integer	optional	Cursor for pagination
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/contacts?search=jane&expand=company&limit=10"
+
+GET
+/api/v1/contacts/:id
+
+Retrieve a single contact by ID.
+Parameter	Type	Required	Description
+expand	string	optional	Expand: company, deals
+fields	string	optional	Comma-separated fields to return
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/contacts/42?expand=company,deals"
+
+json
+
+{
+  "data": {
+    "id": 42,
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "email": "jane@example.com",
+    "phone": "+1-555-0123",
+    "companyId": 7,
+    "company": {
+      "id": 7,
+      "name": "Acme Corp"
+    },
+    "deals": [
+      { "id": 15, "title": "Enterprise Plan", "value": 50000, "status": "open" }
+    ]
+  }
+}
+
+POST
+/api/v1/contacts
+
+Create a new contact. Optionally include a company object to auto-create or match an existing company by name.
+Parameter	Type	Required	Description
+firstName	string	optional	Contact first name
+lastName	string	optional	Contact last name
+email	string	optional	Contact email address
+phone	string	optional	Contact phone number
+companyId	integer	optional	Link to existing company by ID
+company	object	optional	Auto-create/match company: { name, website, sector }
+bash
+
+curl -X POST -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "email": "jane@example.com",
+    "company": { "name": "Acme Corp" }
+  }' \
+  "https://lift-os.com/api/v1/contacts"
+
+Fires: contact.created webhook
+PATCH
+/api/v1/contacts/:id
+
+Update fields on an existing contact. Only include the fields you want to change.
+bash
+
+curl -X PATCH -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "phone": "+1-555-9999" }' \
+  "https://lift-os.com/api/v1/contacts/42"
+
+Fires: contact.updated webhook
+DELETE
+/api/v1/contacts/:id
+
+Archive a contact (soft delete).
+bash
+
+curl -X DELETE -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/contacts/42"
+
+json
+
+{ "data": { "id": 42, "deleted": true } }
+
+Fires: contact.deleted webhook
+Companies
+
+Manage company records. Requires companies:read or companies:write scopes.
+GET
+/api/v1/companies
+
+List all companies with cursor-based pagination.
+Parameter	Type	Required	Description
+search	string	optional	Search by company name
+updated_after	ISO 8601	optional	Filter by update timestamp
+created_after	ISO 8601	optional	Filter by creation timestamp
+sort	string	optional	Sort field (default: createdAt)
+order	string	optional	Sort direction: asc or desc
+fields	string	optional	Comma-separated fields to return
+limit	integer	optional	Records per page (default 25, max 100)
+cursor	integer	optional	Cursor for pagination
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/companies?search=acme&limit=10"
+
+GET
+/api/v1/companies/:id
+
+Retrieve a single company by ID.
+Parameter	Type	Required	Description
+expand	string	optional	Expand: contacts
+fields	string	optional	Comma-separated fields to return
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/companies/7?expand=contacts"
+
+json
+
+{
+  "data": {
+    "id": 7,
+    "name": "Acme Corp",
+    "website": "https://acme.com",
+    "sector": "Technology",
+    "city": "San Francisco",
+    "country": "US",
+    "contacts": [
+      { "id": 42, "firstName": "Jane", "lastName": "Doe", "email": "jane@acme.com" }
+    ]
+  }
+}
+
+POST
+/api/v1/companies
+
+Create a new company.
+Parameter	Type	Required	Description
+name	string	required	Company name
+website	string	optional	Company website URL
+sector	string	optional	Industry sector
+address	string	optional	Street address
+city	string	optional	City
+country	string	optional	Country
+phone	string	optional	Phone number
+bash
+
+curl -X POST -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Acme Corp", "website": "https://acme.com", "sector": "Technology" }' \
+  "https://lift-os.com/api/v1/companies"
+
+Fires: company.created webhook
+PATCH
+/api/v1/companies/:id
+
+Update fields on an existing company.
+bash
+
+curl -X PATCH -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "sector": "SaaS" }' \
+  "https://lift-os.com/api/v1/companies/7"
+
+Fires: company.updated webhook
+DELETE
+/api/v1/companies/:id
+
+Delete a company.
+bash
+
+curl -X DELETE -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/companies/7"
+
+json
+
+{ "data": { "id": 7, "deleted": true } }
+
+Fires: company.deleted webhook
+Deals
+
+Manage deal/pipeline records. Requires deals:read or deals:write scopes.
+GET
+/api/v1/deals
+
+List all deals with cursor-based pagination.
+Parameter	Type	Required	Description
+status	string	optional	Filter by status (open, won, lost)
+pipeline_id	integer	optional	Filter by pipeline ID
+stage_id	integer	optional	Filter by stage ID
+owner_id	integer	optional	Filter by owner user ID
+updated_after	ISO 8601	optional	Filter by update timestamp
+created_after	ISO 8601	optional	Filter by creation timestamp
+sort	string	optional	Sort field (default: createdAt)
+order	string	optional	Sort direction: asc or desc
+fields	string	optional	Comma-separated fields to return
+expand	string	optional	Expand: company, contacts, stage, pipeline
+limit	integer	optional	Records per page (default 25, max 100)
+cursor	integer	optional	Cursor for pagination
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/deals?status=open&expand=company,stage&limit=20"
+
+GET
+/api/v1/deals/:id
+
+Retrieve a single deal by ID.
+Parameter	Type	Required	Description
+expand	string	optional	Expand: company, contacts, stage, pipeline
+fields	string	optional	Comma-separated fields to return
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/deals/15?expand=company,contacts,stage,pipeline"
+
+json
+
+{
+  "data": {
+    "id": 15,
+    "title": "Enterprise Plan",
+    "value": 50000,
+    "currency": "USD",
+    "status": "open",
+    "stageId": 3,
+    "pipelineId": 1,
+    "companyId": 7,
+    "company": { "id": 7, "name": "Acme Corp" },
+    "contacts": [
+      { "id": 42, "firstName": "Jane", "lastName": "Doe" }
+    ],
+    "stage": { "id": 3, "name": "Proposal", "order": 3 },
+    "pipeline": { "id": 1, "name": "Sales Pipeline" }
+  }
+}
+
+POST
+/api/v1/deals
+
+Create a new deal.
+Parameter	Type	Required	Description
+title	string	required	Deal title
+stageId	integer	required	Pipeline stage ID
+value	number	optional	Deal value
+currency	string	optional	Currency code (default: USD)
+companyId	integer	optional	Associated company ID
+ownerId	integer	optional	Owner user ID
+bash
+
+curl -X POST -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Enterprise Plan",
+    "stageId": 1,
+    "value": 50000,
+    "companyId": 7
+  }' \
+  "https://lift-os.com/api/v1/deals"
+
+Fires: deal.created webhook
+PATCH
+/api/v1/deals/:id
+
+Update deal fields. Changing status to "won" or "lost" fires additional webhooks. Changing stageId fires a stage change webhook.
+bash
+
+curl -X PATCH -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "won", "value": 55000 }' \
+  "https://lift-os.com/api/v1/deals/15"
+
+Fires: deal.updated, and conditionally deal.won / deal.lost / deal.stage_changed
+DELETE
+/api/v1/deals/:id
+
+Archive a deal.
+bash
+
+curl -X DELETE -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/deals/15"
+
+json
+
+{ "data": { "id": 15, "deleted": true } }
+
+Leads
+
+Manage sales leads with AI scoring and qualification. Requires leads:read or leads:write scopes.
+GET
+/api/v1/leads
+
+List all leads with cursor-based pagination.
+Parameter	Type	Required	Description
+status	string	optional	Filter by status (e.g. prospect, qualified, converted)
+source	string	optional	Filter by lead source
+owner_id	integer	optional	Filter by assigned owner
+contact_id	integer	optional	Filter by linked contact
+company_id	integer	optional	Filter by linked company
+urgency	string	optional	Filter by urgency (low, medium, high)
+review_status	string	optional	Filter by review status (pending, reviewed)
+expand	string	optional	Expand: contact, company
+sort	string	optional	Sort field (default: createdAt)
+order	string	optional	Sort direction: asc or desc
+fields	string	optional	Comma-separated fields to return
+limit	integer	optional	Records per page (default 25, max 100)
+cursor	integer	optional	Cursor for pagination
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/leads?status=prospect&urgency=high&expand=contact"
+
+GET
+/api/v1/leads/:id
+
+Retrieve a single lead by ID.
+Parameter	Type	Required	Description
+expand	string	optional	Expand: contact, company
+fields	string	optional	Comma-separated fields to return
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/leads/12?expand=contact,company"
+
+json
+
+{
+  "data": {
+    "id": 12,
+    "status": "prospect",
+    "source": "website",
+    "sourceChannel": "contact_form",
+    "confidence": "0.85",
+    "summary": "Interested in enterprise plan",
+    "intent": "purchase",
+    "urgency": "high",
+    "reviewStatus": "pending",
+    "contact": { "id": 42, "firstName": "Jane", "lastName": "Doe" },
+    "company": { "id": 7, "name": "Acme Corp" }
+  }
+}
+
+POST
+/api/v1/leads
+
+Create a new lead.
+Parameter	Type	Required	Description
+status	string	optional	Lead status (default: prospect)
+source	string	optional	Lead source (e.g. website, referral, email)
+sourceChannel	string	optional	Source channel (e.g. contact_form, ad_campaign)
+contactId	integer	optional	Linked contact ID
+companyId	integer	optional	Linked company ID
+ownerId	integer	optional	Assigned owner user ID
+summary	string	optional	Lead summary / description
+intent	string	optional	Detected intent
+urgency	string	optional	Urgency level (low, medium, high)
+confidence	decimal	optional	Confidence score 0.00-1.00
+bash
+
+curl -X POST -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "source": "website", "contactId": 42, "urgency": "high", "summary": "Wants a demo" }' \
+  "https://lift-os.com/api/v1/leads"
+
+Fires: lead.created webhook
+PATCH
+/api/v1/leads/:id
+
+Update fields on an existing lead.
+bash
+
+curl -X PATCH -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "qualified", "urgency": "high" }' \
+  "https://lift-os.com/api/v1/leads/12"
+
+Fires: lead.updated webhook
+DELETE
+/api/v1/leads/:id
+
+Archive a lead (soft delete).
+bash
+
+curl -X DELETE -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/leads/12"
+
+json
+
+{ "data": { "id": 12, "deleted": true } }
+
+Fires: lead.deleted webhook
+Knowledge Base
+
+Manage knowledge base categories and articles. Requires kb:read or kb:write scopes.
+Categories
+GET
+/api/v1/kb/categories
+
+List all knowledge base categories.
+Parameter	Type	Required	Description
+fields	string	optional	Comma-separated fields to return
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/kb/categories"
+
+GET
+/api/v1/kb/categories/:id
+
+Retrieve a single category by ID.
+Parameter	Type	Required	Description
+expand	string	optional	Expand: articles
+fields	string	optional	Comma-separated fields to return
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/kb/categories/3?expand=articles"
+
+json
+
+{
+  "data": {
+    "id": 3,
+    "name": "Getting Started",
+    "icon": "book",
+    "description": "Introductory guides and setup articles",
+    "articles": [
+      { "id": 10, "title": "Quick Start Guide", "status": "published", "viewCount": 142 }
+    ]
+  }
+}
+
+POST
+/api/v1/kb/categories
+
+Create a new category.
+Parameter	Type	Required	Description
+name	string	required	Category name
+icon	string	optional	Icon identifier
+description	string	optional	Category description
+bash
+
+curl -X POST -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "FAQs", "icon": "help-circle", "description": "Frequently asked questions" }' \
+  "https://lift-os.com/api/v1/kb/categories"
+
+PATCH
+/api/v1/kb/categories/:id
+
+Update a category.
+bash
+
+curl -X PATCH -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Product FAQs" }' \
+  "https://lift-os.com/api/v1/kb/categories/3"
+
+DELETE
+/api/v1/kb/categories/:id
+
+Delete a category. Articles in this category will not be deleted but will become uncategorised.
+bash
+
+curl -X DELETE -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/kb/categories/3"
+
+json
+
+{ "data": { "id": 3, "deleted": true } }
+
+Articles
+GET
+/api/v1/kb/articles
+
+List all knowledge base articles with cursor-based pagination.
+Parameter	Type	Required	Description
+category_id	integer	optional	Filter by category ID
+status	string	optional	Filter by status (draft, published)
+search	string	optional	Search by title and content
+expand	string	optional	Expand: category
+sort	string	optional	Sort field (default: createdAt)
+order	string	optional	Sort direction: asc or desc
+fields	string	optional	Comma-separated fields to return
+limit	integer	optional	Records per page (default 25, max 100)
+cursor	integer	optional	Cursor for pagination
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/kb/articles?status=published&category_id=3&expand=category"
+
+GET
+/api/v1/kb/articles/:id
+
+Retrieve a single article by ID.
+Parameter	Type	Required	Description
+expand	string	optional	Expand: category
+fields	string	optional	Comma-separated fields to return
+bash
+
+curl -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/kb/articles/10?expand=category"
+
+json
+
+{
+  "data": {
+    "id": 10,
+    "title": "Quick Start Guide",
+    "content": "Welcome to our platform! Here's how to get started...",
+    "status": "published",
+    "viewCount": 142,
+    "categoryId": 3,
+    "category": {
+      "id": 3,
+      "name": "Getting Started"
+    },
+    "createdAt": "2026-03-01T10:00:00.000Z",
+    "updatedAt": "2026-03-10T14:30:00.000Z"
+  }
+}
+
+POST
+/api/v1/kb/articles
+
+Create a new article. Published articles are automatically indexed for search.
+Parameter	Type	Required	Description
+title	string	required	Article title
+content	string	required	Article content (supports HTML)
+categoryId	integer	optional	Category ID to assign to
+status	string	optional	Article status: draft or published (default: draft)
+bash
+
+curl -X POST -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "title": "How to Reset Your Password", "content": "<p>Follow these steps...</p>", "categoryId": 3, "status": "published" }' \
+  "https://lift-os.com/api/v1/kb/articles"
+
+PATCH
+/api/v1/kb/articles/:id
+
+Update an existing article. Re-indexes the article for search when content or title changes.
+bash
+
+curl -X PATCH -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "published", "content": "<p>Updated instructions...</p>" }' \
+  "https://lift-os.com/api/v1/kb/articles/10"
+
+DELETE
+/api/v1/kb/articles/:id
+
+Permanently delete an article and its search index.
+bash
+
+curl -X DELETE -H "X-API-Key: sk_live_..." \
+  "https://lift-os.com/api/v1/kb/articles/10"
+
+json
+
+{ "data": { "id": 10, "deleted": true } }
+
+Search
+
+Search across contacts, companies, deals, leads, and knowledge base articles in a single request. Requires any read scope.
+POST
+/api/v1/search
+
+Search across multiple entity types.
+Parameter	Type	Required	Description
+query	string	required	Search query string
+entities	string[]	optional	Entity types to search: ["contacts", "companies", "deals", "leads", "kb_articles"]
+limit	integer	optional	Max results per entity type (default 10)
+bash
+
+curl -X POST -H "X-API-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "acme",
+    "entities": ["contacts", "companies", "deals", "leads", "kb_articles"],
+    "limit": 5
+  }' \
+  "https://lift-os.com/api/v1/search"
+
+json
+
+{
+  "data": {
+    "contacts": [
+      { "id": 42, "firstName": "Jane", "lastName": "Doe", "email": "jane@acme.com" }
+    ],
+    "companies": [
+      { "id": 7, "name": "Acme Corp", "website": "https://acme.com" }
+    ],
+    "deals": [
+      { "id": 15, "title": "Acme Enterprise Plan", "value": 50000 }
+    ],
+    "leads": [
+      { "id": 12, "source": "website", "summary": "Acme Corp interested in enterprise plan" }
+    ],
+    "kb_articles": [
+      { "id": 10, "title": "Acme Integration Guide", "status": "published" }
+    ]
+  }
+}
+
+Error Codes
+
+When an error occurs, the API returns a JSON body with an error object.
+json
+
+{
+  "error": {
+    "code": "not_found",
+    "message": "Contact not found"
+  }
+}
+
+Code	Status	Description
+unauthorized	401	Missing or invalid API key
+forbidden	403	API key lacks required scope
+not_found	404	Requested resource does not exist
+validation_error	400	Request body failed validation (includes field info)
+rate_limit_exceeded	429	Too many requests — retry after the specified time
+internal_error	500	Unexpected server error
+
+Validation errors may include a field property indicating which field caused the error.
+json
+
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Company name is required",
+    "field": "name"
+  }
+}
+
+Need help?
+
+Check our knowledge base for detailed API guides and step-by-step examples.

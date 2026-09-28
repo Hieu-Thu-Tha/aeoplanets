@@ -1,0 +1,41 @@
+Our Pricing: Know Your AI Visibility
+
+Stop guessing and start winning the answer box. Our usage-based plans ensure you only pay for the AI insights and tracking power you need to dominate the new search landscape.
+
+Choose the plan that matches your ambition to lead the AI conversation.
+
+📊 AEOStars Pricing Plans
+
+Plan	Starter	Growth	Enterprise
+Best For	Solo Content Creators and Small Projects	Growing Teams and Content Agencies	Large Brands and High-Volume Operations
+Monthly Price (Billed Monthly)	£99/month	£199/month	Custom Quote
+Included Prompt Runs (Simulated Queries)	10,000	50,000	100,000+
+Key Tracking Features			
+Domains Tracked	1	Up to 5	Custom Number
+Competitive Citation Gap Analysis	3 Competitors	10 Competitors	20+ Competitors
+AI Platforms Tracked	Core Gemini and ChatGPT Surfaces	All Major AI Surfaces (Gemini, ChatGPT, Perplexity, Copilot)	All Major + Custom Endpoints
+Citation Context Extractor	Yes	Yes	Yes
+Top-Cited Content Report	Yes	Yes	Yes
+Overage Cost	£0.015 per additional run	£0.008 per additional run	Custom Rate
+
+What is a 'Prompt Run'?
+
+A Prompt Run is the core unit of value. It means our AI monitoring engine takes one unique question (a query like "best cloud security practices") and automatically runs it across all tracked public AI platforms to check for your citation.
+
+This ensures you are tracking your visibility across the entire AI ecosystem, not just one platform.
+
+Features Explained
+
+Competitive Citation Gap Analysis
+
+This is the most powerful feature. We monitor the questions where the AI cited your competitor but not your website. This provides an immediate, precise action plan to update your content and steal the next citation.
+
+Citation Context Extractor
+
+We don't just show you that you were cited; we extract the exact sentence the AI wrote that used your content. This proves the value of your content and shows you exactly what information the AI trusts.
+
+Top-Cited Content Report
+
+This report reveals your website's best performing pages in the eyes of the AI. Use it as a blueprint to redesign your other pages, ensuring all new content follows the winning structure for maximum AI extractability.
+
+Ready to start winning the answer box? Choose your plan below and stop letting the AI ignore your best content.

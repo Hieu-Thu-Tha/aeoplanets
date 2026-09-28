@@ -1,0 +1,202 @@
+LinkedIn OAuth Authentication Implementation Guide
+Overview
+This app uses LinkedIn OpenID Connect for social authentication via passport-oauth2 strategy. Users can sign up/log in with LinkedIn, with automatic account linking and profile data syncing.
+
+Required NPM Packages
+passport
+passport-oauth2
+express-session
+bcrypt
+Required Environment Secrets
+Set these in your Replit Secrets (the agent should use ask_secrets tool):
+
+LINKEDIN_CLIENT_ID - Get from LinkedIn Developer Portal
+LINKEDIN_CLIENT_SECRET - Get from LinkedIn Developer Portal
+SESSION_SECRET - Random string for session encryption (auto-generated if missing)
+ADMIN_API_KEY (optional) - For programmatic admin access
+LinkedIn Developer Portal Setup
+Go to https://developer.linkedin.com/
+Create a new app
+Request access to "Sign In with LinkedIn using OpenID Connect"
+Add authorized redirect URLs:
+Production: https://your-domain.com/api/auth/linkedin/callback
+Development: https://your-replit-dev-domain.replit.dev:5000/api/auth/linkedin/callback
+Local: http://localhost:5000/api/auth/linkedin/callback
+Database Schema Requirements
+Add these fields to your users table in shared/schema.ts:
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").unique().notNull(),
+  email: text("email").unique().notNull(),
+  password: text("password"), // Nullable for OAuth users
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  
+  // OAuth / LinkedIn fields
+  linkedinId: text("linkedin_id").unique(), // LinkedIn's unique user ID (sub)
+  profilePictureUrl: text("profile_picture_url"), // Profile picture URL
+  authProvider: text("auth_provider", { 
+    enum: ["local", "linkedin"] 
+  }).default("local").notNull(),
+  
+  role: text("role", { enum: ["student", "admin"] }).default("student").notNull(),
+  credits: integer("credits").default(100).notNull(),
+  // ... other fields
+});
+Storage Interface Methods Needed
+Add these methods to your storage interface (server/storage.ts):
+
+interface IStorage {
+  // Existing methods...
+  getUserByLinkedInId(linkedinId: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(userId: number, updates: Partial<User>): Promise<User>;
+  
+  // Session store for express-session
+  sessionStore: session.Store;
+}
+OAuth Strategy Implementation
+Key implementation details from server/auth.ts:
+
+1. Dynamic Callback URL Configuration
+let callbackURL: string;
+if (process.env.REPLIT_DOMAINS) {
+  // Production: Use custom domain (e.g., inbox-iq.com)
+  const domains = process.env.REPLIT_DOMAINS.split(',').map(d => d.trim());
+  const customDomain = domains.find(d => d.includes('inbox-iq.com'));
+  const productionDomain = customDomain || domains[0];
+  callbackURL = `https://${productionDomain}/api/auth/linkedin/callback`;
+} else if (process.env.REPLIT_DEV_DOMAIN) {
+  // Development: Use :5000 port for Replit proxy routing
+  callbackURL = `https://${process.env.REPLIT_DEV_DOMAIN}:5000/api/auth/linkedin/callback`;
+} else {
+  // Local fallback
+  callbackURL = 'http://localhost:5000/api/auth/linkedin/callback';
+}
+2. OAuth2Strategy Configuration
+passport.use('linkedin', 
+  new OAuth2Strategy(
+    {
+      authorizationURL: 'https://www.linkedin.com/oauth/v2/authorization',
+      tokenURL: 'https://www.linkedin.com/oauth/v2/accessToken',
+      clientID: process.env.LINKEDIN_CLIENT_ID,
+      clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
+      callbackURL,
+      scope: ['openid', 'profile', 'email'], // IMPORTANT: Include openid
+      state: true, // CSRF protection
+    },
+    async (accessToken, refreshToken, params, profile, done) => {
+      // Callback handler (see below)
+    }
+  )
+);
+3. User Profile Fetch (LinkedIn OpenID Connect)
+// Inside OAuth2Strategy callback:
+const response = await fetch('https://api.linkedin.com/v2/userinfo', {
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+  },
+});
+const userInfo = await response.json();
+// Response: { sub, name, given_name, family_name, picture, email, email_verified }
+const linkedinId = userInfo.sub;
+const email = userInfo.email;
+const firstName = userInfo.given_name;
+const lastName = userInfo.family_name;
+const profilePictureUrl = userInfo.picture;
+4. User Creation/Linking Logic
+// 1. Try to find by LinkedIn ID (returning user)
+let user = await storage.getUserByLinkedInId(linkedinId);
+if (user) return done(null, user);
+// 2. Try to find by email (link accounts)
+user = await storage.getUserByEmail(email);
+if (user) {
+  // Link LinkedIn to existing account
+  const updatedUser = await storage.updateUser(user.id, {
+    linkedinId,
+    profilePictureUrl,
+    authProvider: 'linkedin',
+    firstName: firstName || user.firstName,
+    lastName: lastName || user.lastName,
+  });
+  return done(null, updatedUser);
+}
+// 3. Create new user
+const username = await generateUniqueUsername(firstName, lastName, email);
+const newUser = await storage.createUser({
+  username,
+  email,
+  password: null, // OAuth users have no password
+  firstName,
+  lastName,
+  linkedinId,
+  profilePictureUrl,
+  authProvider: 'linkedin',
+  role: 'student',
+  credits: 100, // Default credits for new users
+});
+return done(null, newUser);
+Express Routes
+Initiate OAuth Flow
+app.get('/api/auth/linkedin', 
+  passport.authenticate('linkedin', { 
+    scope: ['openid', 'profile', 'email']
+  })
+);
+OAuth Callback Handler
+app.get('/api/auth/linkedin/callback', 
+  passport.authenticate('linkedin', { failureRedirect: '/auth?error=oauth_failed' }),
+  (req, res) => {
+    // Success - redirect to dashboard or returnTo URL
+    const returnTo = req.session.returnTo || '/dashboard';
+    delete req.session.returnTo;
+    res.redirect(returnTo);
+  }
+);
+Session Management
+const sessionSettings: session.SessionOptions = {
+  secret: process.env.SESSION_SECRET || randomBytes(32).toString("hex"),
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production", // HTTPS only in prod
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  },
+  store: storage.sessionStore, // Database-backed session store
+};
+app.set("trust proxy", 1); // IMPORTANT for Replit/proxied environments
+app.use(session(sessionSettings));
+app.use(passport.initialize());
+app.use(passport.session());
+Critical Implementation Gotchas
+Scope Must Include openid: LinkedIn OpenID Connect requires ['openid', 'profile', 'email']
+Use Fetch for UserInfo: Node.js doesn't include fetch by default in older versions - ensure it's available or use node-fetch
+Callback URL Port: In Replit dev, use :5000 port in callback URL for proper proxy routing
+Trust Proxy: Must set app.set("trust proxy", 1) for secure cookies to work behind Replit's proxy
+Handle Missing Email: Some LinkedIn accounts don't share email - add validation:
+if (!email) {
+  return done(new Error('No email provided by LinkedIn'));
+}
+Password Nullable: OAuth users have password: null - check this in local login strategy:
+if (!user.password) {
+  return done(null, false, { message: "Please sign in with LinkedIn" });
+}
+Session Return-To: Store redirect location before OAuth:
+if (req.query.returnTo) {
+  req.session.returnTo = req.query.returnTo;
+  req.session.save((err) => { /* then authenticate */ });
+}
+Testing Checklist
+ LinkedIn Developer app created with correct redirect URLs
+ Environment secrets configured
+ Database schema includes LinkedIn fields
+ Storage methods implemented
+ Can initiate OAuth flow from /api/auth/linkedin
+ Callback URL matches LinkedIn Developer Portal
+ New users created with profile data
+ Existing users linked by email
+ Sessions persist after OAuth login
+ Profile pictures display correctly
+This implementation provides a complete, production-ready LinkedIn OAuth flow with account linking, profile syncing, and proper session management. The agent working on your new app can follow these exact patterns for consistent authentication across projects.

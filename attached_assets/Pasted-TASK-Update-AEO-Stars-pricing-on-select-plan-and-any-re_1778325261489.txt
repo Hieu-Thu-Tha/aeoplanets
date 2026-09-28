@@ -1,0 +1,158 @@
+TASK: Update AEO Stars pricing on /select-plan and any related billing surfaces.
+
+SCOPE
+Most changes are copy + threshold values, but there are TWO structural changes:
+  (a) Plan count goes from 3 to 5: add "Accelerate" between Growth and Custom, add "Agency" at the end. Rename "Enterprise" to "Custom".
+  (b) Pricing display flips from annual-headline to monthly-headline, with annual underneath. Saving label changes from "Save 23%" to "Save 28%".
+
+NEW PLAN MATRIX (replace existing /select-plan content)
+
+STARTER  £75/mo or £650/yr (Save 28%)
+- 10 Topics (75 Prompts)
+- 1 User Licence
+- 1 Brand Profile
+- 3 Competitor Domains
+- All Major LLMs (Claude, OpenAI, Gemini)
+- AI Visibility Dashboard
+- AI Perception Mirror
+- Machine Readability Audit (1/month)
+- Change Alerts (50/month)
+- Data Refresh (Weekly)
+- Executive PDF Report (1/month)
+- Competitor AI Positioning Map
+- Semantic Coverage Gap Analysis
+- Marketing & Competitive Reports
+- Core Web Vitals Report
+
+GROWTH  £150/mo or £1,300/yr (Save 28%)  [Most Popular badge — TBC, see questions]
+- 25 Topics (150 Prompts)
+- 2 User Licences
+- 1 Brand Profile
+- 5 Competitor Domains
+- All of Starter, plus:
+- Machine Readability Audit (2/month)
+- Change Alerts (150/month)
+- Data Refresh (Every 3 days)
+- Executive PDF Report (2/month)
+- Topic & Prompt Research (Coming Soon)
+- GA4 Integration (Coming Soon)
+- GSC Integration (Coming Soon)
+
+ACCELERATE  £300/mo or £2,600/yr (Save 28%)
+- 50 Topics (250 Prompts)
+- Up to 5 User Licences
+- 1 Brand Profile
+- 10 Competitor Domains
+- All of Growth, plus:
+- Machine Readability Audit (1/week)
+- Change Alerts (300/month)
+- Data Refresh (Daily)
+- Executive PDF Report (1/week)
+- Account Manager Support
+- Support Team
+
+CUSTOM  Contact Sales
+- Everything in Accelerate, plus:
+- Unlimited Topics & Prompts
+- Unlimited Brand Profiles
+- Unlimited Competitor Domains
+- API Access (Coming Soon)
+- Dedicated Account Manager
+- Priority Support
+
+AGENCY  Contact Sales
+- Everything in Custom & Accelerate, plus:
+- White Label Option
+
+ADD-ONS (replace existing add-on section, monthly billing only)
+
+EXTRA USER  £15/mo
+- 1 Extra User Licence
+- Invoiced with your subscription
+- Cancel anytime
+
+EXTRA BRAND PACK  £50/mo
+- 1 Extra Brand Profile
+- 3 Additional Competitors
+- 10 Additional Topics / 75 Additional Prompts
+- 1 Additional Machine Readability Report
+- 50 Additional Change Alerts
+- 1 Additional PDF Report
+- Invoiced with your subscription
+- Cancel anytime
+
+TOPIC & PROMPT PACK  £25/mo
+- 10 Additional Topics
+- 100 Additional Prompts
+- Invoiced with your subscription
+- Cancel anytime
+
+CHANGE ALERTS PACK  £25/mo
+- 50 Additional Change Alerts
+- 1 Extra Data Refresh per week
+- Invoiced with your subscription
+- Cancel anytime
+
+COMPETITOR PACK  £15/mo
+- 5 Extra Competitor Slots
+- AI Competitor Positioning Intelligence
+- Invoiced with your subscription
+- Cancel anytime
+
+UI CHANGES
+1. The plan grid will need to render 5 cards instead of 3 — check responsive breakpoints; consider 3-up + 2-up on desktop, single column on mobile, or a horizontal scroll. Don't shrink card width below readable.
+2. Toggle: keep monthly/annual toggle if it exists; default to monthly. Annual saving label = "Save 28%".
+3. "Most Popular" badge: keep on Growth for now (confirm with Adam before launch).
+4. CTA buttons: Starter/Growth/Accelerate = existing checkout flow; Custom and Agency = "Contact Sales" mailto or form.
+5. Free trial messaging: Adam to confirm whether 7-day free trial copy stays.
+
+BILLING / STRIPE CHANGES
+1. Create new Stripe Prices for each new plan and add-on. Do NOT delete or modify existing Prices — old subscribers stay on legacy prices unless explicitly migrated.
+2. New plan IDs to wire to checkout:
+   - starter_monthly £75, starter_annual £650
+   - growth_monthly £150, growth_annual £1300
+   - accelerate_monthly £300, accelerate_annual £2600
+   - addon_extra_user_monthly £15
+   - addon_extra_brand_monthly £50
+   - addon_topic_prompt_monthly £25
+   - addon_change_alerts_monthly £25
+   - addon_competitor_monthly £15
+3. Custom and Agency: no Stripe price needed yet — both route to a contact form.
+
+ENTITLEMENT/QUOTA CHANGES (back end)
+The plan thresholds drive product limits. Update entitlement logic so each plan reads from a config keyed by plan ID:
+  - topics_limit, prompts_limit, users_limit, brand_profiles_limit,
+    competitor_domains_limit, machine_readability_per_period,
+    change_alerts_per_month, pdf_reports_per_period, data_refresh_cadence
+Add-ons must stack on top of the base plan limits (e.g., Extra Brand Pack adds +1 brand, +3 competitors, +10 topics, +75 prompts, +1 MR report, +50 change alerts, +1 PDF report).
+
+Newly tracked product surfaces:
+  - "User Licence" — concept doesn't exist yet, requires adding seat management.
+  - "Data Refresh cadence" — make sure refresh job respects per-plan cadence.
+  - "Core Web Vitals Report" — confirm whether feature exists; if it's a coming-soon, mark accordingly.
+
+GRANDFATHERING
+Existing Starter (£29.99/mo equiv) and Growth (£79.99/mo equiv) subscribers must remain on their current price and entitlements until Adam decides on a migration. Do not auto-upgrade or auto-charge any existing customer.
+
+COPY FIXES (do not propagate typos from the source brief)
+- "Semantic" not "Sementic"
+- "Alerts" not "Alers"
+- "Annually" not "Anually"
+- "Unlimited" not "Unlimted"
+- "Additional" not "Addtional"
+- "Subscription" not "Subsciption"
+
+ACCEPTANCE CRITERIA
+- /select-plan renders 5 plan cards in the order Starter, Growth, Accelerate, Custom, Agency.
+- Monthly/annual toggle works; annual shows "Save 28%".
+- 5 add-on cards render below the plan grid in the order shown above.
+- Selecting a paid plan routes to Stripe checkout with the correct new Price ID.
+- Selecting Custom or Agency opens the contact sales flow.
+- Existing subscribers see no price change on next renewal.
+- All copy is free of the typos listed above.
+- Mobile layout doesn't break with 5 cards.
+
+OUT OF SCOPE FOR THIS TICKET
+- Migrating existing subscribers to new plans.
+- Building seat management UI (placeholder is fine for now).
+- Building Core Web Vitals report if it doesn't exist (mark as Coming Soon).
