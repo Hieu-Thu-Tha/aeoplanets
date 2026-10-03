@@ -2,6 +2,14 @@ import { GoogleGenAI } from "@google/genai";
 import type { Brand, VisibilityRun, PerceptionProfile, CoverageGap, ReadabilityAudit } from "@shared/schema";
 import { executeAiCall, type AiUsageContext } from "./services/ai-usage";
 import { usageFromGemini } from "./services/llm-provider/gemini/usage";
+import {
+  fakeAiSleep,
+  fakeCompetitiveNarrative,
+  fakeExecutiveNarrative,
+  fakeMarketingNarrative,
+  isFakeAiEnabled,
+  maybeThrowFakeAiError,
+} from "./services/fake-ai";
 
 export interface ReportData {
   brand: Brand;
@@ -302,7 +310,13 @@ Return 5-7 strategic actions. Be specific to ${m.brand.domain}, not generic. Ref
 
   let aiResponse: { executiveSummary: string; strategicActions: { action: string; reasoning: string; priority: string }[]; competitorPositioning: string; progressIndicators: string };
   try {
-    const raw = await callGemini(prompt, reportUsage(data));
+    if (isFakeAiEnabled()) {
+      await fakeAiSleep();
+      maybeThrowFakeAiError("executive report");
+    }
+    const raw = isFakeAiEnabled()
+      ? JSON.stringify(fakeExecutiveNarrative(m.brand.domain))
+      : await callGemini(prompt, reportUsage(data));
     aiResponse = cleanJsonString(raw);
   } catch (e) {
     console.error("Gemini executive report error:", e);
@@ -406,38 +420,50 @@ Create comparison pages for the top 3 competitors: ${m.brand.competitors?.slice(
   let actionsResponse: any = {};
   let supplementResponse: any = {};
 
-  const [actionsResult, supplementResult] = await Promise.allSettled([
-    callGemini(actionsPrompt, reportUsage(data)).then(cleanJsonString),
-    callGemini(supplementPrompt, reportUsage(data)).then(cleanJsonString),
-  ]);
-
-  if (actionsResult.status === "fulfilled") {
-    actionsResponse = actionsResult.value;
-  } else {
-    console.error("Gemini marketing actions error:", actionsResult.reason);
-    actionsResponse = {
-      executiveSummary: `Marketing action plan for ${m.brand.domain} to improve AI visibility from ${m.shareOfVoice}%.`,
-      actionItems: missingTopics.slice(0, 5).map(t => ({
-        title: `Create content: ${t.topic}`,
-        reasoning: `Coverage gap with ${t.severity} severity.`,
-        steps: ["Research topic thoroughly", "Write comprehensive content", "Add schema markup", "Publish and monitor results"],
-        exampleContent: `Detailed guide about ${t.topic} for ${m.brand.category || "professionals"}.`,
-        wordsToUse: [t.topic, m.brand.category || ""].filter(Boolean),
-        expectedImpact: "Improved category visibility",
-        priority: t.severity === "high" ? "critical" : "high",
-      })),
-    };
-  }
-
-  if (supplementResult.status === "fulfilled") {
-    supplementResponse = supplementResult.value;
-  } else {
-    console.error("Gemini marketing supplement error:", supplementResult.reason);
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("marketing report");
+    const fake = fakeMarketingNarrative(m.brand.domain, m.brand.competitors ?? []);
+    actionsResponse = { executiveSummary: fake.executiveSummary, actionItems: fake.actionItems };
     supplementResponse = {
-      faqStrategy: { questions: [], implementation: "Add FAQ schema markup to key pages." },
-      comparisonPages: [],
-      contentCalendar: "Month 1: Foundation pages. Month 2: Comparison content. Month 3: Authority building.",
+      faqStrategy: fake.faqStrategy,
+      comparisonPages: fake.comparisonPages,
+      contentCalendar: fake.contentCalendar,
     };
+  } else {
+    const [actionsResult, supplementResult] = await Promise.allSettled([
+      callGemini(actionsPrompt, reportUsage(data)).then(cleanJsonString),
+      callGemini(supplementPrompt, reportUsage(data)).then(cleanJsonString),
+    ]);
+
+    if (actionsResult.status === "fulfilled") {
+      actionsResponse = actionsResult.value;
+    } else {
+      console.error("Gemini marketing actions error:", actionsResult.reason);
+      actionsResponse = {
+        executiveSummary: `Marketing action plan for ${m.brand.domain} to improve AI visibility from ${m.shareOfVoice}%.`,
+        actionItems: missingTopics.slice(0, 5).map(t => ({
+          title: `Create content: ${t.topic}`,
+          reasoning: `Coverage gap with ${t.severity} severity.`,
+          steps: ["Research topic thoroughly", "Write comprehensive content", "Add schema markup", "Publish and monitor results"],
+          exampleContent: `Detailed guide about ${t.topic} for ${m.brand.category || "professionals"}.`,
+          wordsToUse: [t.topic, m.brand.category || ""].filter(Boolean),
+          expectedImpact: "Improved category visibility",
+          priority: t.severity === "high" ? "critical" : "high",
+        })),
+      };
+    }
+
+    if (supplementResult.status === "fulfilled") {
+      supplementResponse = supplementResult.value;
+    } else {
+      console.error("Gemini marketing supplement error:", supplementResult.reason);
+      supplementResponse = {
+        faqStrategy: { questions: [], implementation: "Add FAQ schema markup to key pages." },
+        comparisonPages: [],
+        contentCalendar: "Month 1: Foundation pages. Month 2: Comparison content. Month 3: Authority building.",
+      };
+    }
   }
 
   return {
@@ -535,7 +561,13 @@ Analyze the top 3-5 competitors. Provide 3-5 differentiation opportunities. Iden
 
   let aiResponse: any;
   try {
-    const raw = await callGemini(prompt, reportUsage(data));
+    if (isFakeAiEnabled()) {
+      await fakeAiSleep();
+      maybeThrowFakeAiError("competitive report");
+    }
+    const raw = isFakeAiEnabled()
+      ? JSON.stringify(fakeCompetitiveNarrative(m.brand.domain, m.topCompetitors.map(c => c.name)))
+      : await callGemini(prompt, reportUsage(data));
     aiResponse = cleanJsonString(raw);
   } catch (e) {
     console.error("Gemini competitive report error:", e);

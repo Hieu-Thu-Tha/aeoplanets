@@ -3,6 +3,7 @@ import { executeAiCall } from "./services/ai-usage";
 import { usageFromPerplexity } from "./services/llm-provider/perplexity/usage";
 import { PERPLEXITY_SEARCH_WEB_METER } from "@shared/ai-billing";
 import { perplexityOutputText } from "./services/llm-provider/perplexity/output";
+import { fakeAiSleep, fakeGeneratedArticle, isFakeAiEnabled, maybeThrowFakeAiError } from "./services/fake-ai";
 
 interface GeneratedArticle {
   title: string;
@@ -44,6 +45,11 @@ export class NewsGenerator {
     targetKeywords: string[] = ["AEO indexing", "AEO improvements", "AEO optimisation", "AEO listings"],
     adminUserId?: string
   ): Promise<GeneratedArticle> {
+    if (isFakeAiEnabled()) {
+      await fakeAiSleep();
+      maybeThrowFakeAiError("news generation");
+      return fakeGeneratedArticle(prompt, targetKeywords);
+    }
     const systemPrompt = `You are an expert SEO content writer specializing in Answer Engine Optimization (AEO). Your task is to generate a comprehensive, SEO-optimized news article that will rank well across search engines and AI platforms like ChatGPT, Claude, and Gemini.
 
 The article must be:

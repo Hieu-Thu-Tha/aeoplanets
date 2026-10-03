@@ -3,6 +3,7 @@ import { storage } from "./storage";
 import type { Brand } from "@shared/schema";
 import { executeAiCall, type AiUsageContext } from "./services/ai-usage";
 import { usageFromOpenAI } from "./services/llm-provider/openai/usage";
+import { fakeAiSleep, fakeCoverageResult, isFakeAiEnabled, maybeThrowFakeAiError } from "./services/fake-ai";
 
 export interface TopicCluster {
   topic: string;
@@ -44,6 +45,12 @@ async function analyzeCoverageWithLLM(brand: Brand, usage: AiUsageContext): Prom
   const competitorNames = (brand.competitors || []).map(c =>
     c.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]
   );
+
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("coverage analysis");
+    return fakeCoverageResult(brand.domain, brand.competitors || []);
+  }
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_DIRECT_KEY });
 

@@ -14,6 +14,7 @@ import { perplexityOutputText, perplexityCitationAppendix, stripPerplexityMarker
 import { extractGeminiCitations } from "./services/llm-provider/gemini/output";
 import { formatSourcesAppendix } from "./services/llm-provider/citations";
 import { isAiUsageCapExceededError } from "./services/ai-usage/cap";
+import { fakeAiSleep, fakePerceptionResult, isFakeAiEnabled, maybeThrowFakeAiError } from "./services/fake-ai";
 
 export interface PerceptionData {
   summary: string;
@@ -98,6 +99,11 @@ function parseLLMPerceptionResponse(text: string): Partial<PerceptionData> {
 }
 
 async function getPerceptionFromOpenAI(brand: Brand, usage?: AiUsageContext): Promise<Partial<PerceptionData>> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("openai perception");
+    return fakePerceptionResult(brand.domain);
+  }
   const client = new OpenAI({ apiKey: process.env.OPENAI_DIRECT_KEY });
   const prompt = buildPerceptionPrompt(brand);
 
@@ -118,6 +124,11 @@ async function getPerceptionFromOpenAI(brand: Brand, usage?: AiUsageContext): Pr
 }
 
 async function getPerceptionFromAnthropic(brand: Brand, usage?: AiUsageContext): Promise<Partial<PerceptionData>> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("anthropic perception");
+    return fakePerceptionResult(brand.domain);
+  }
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const prompt = buildPerceptionPrompt(brand);
 
@@ -138,6 +149,11 @@ async function getPerceptionFromAnthropic(brand: Brand, usage?: AiUsageContext):
 }
 
 async function getPerceptionFromGemini(brand: Brand, usage?: AiUsageContext): Promise<Partial<PerceptionData>> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("gemini perception");
+    return fakePerceptionResult(brand.domain);
+  }
   const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const prompt = buildPerceptionPrompt(brand);
 
@@ -163,6 +179,11 @@ async function getPerceptionFromGemini(brand: Brand, usage?: AiUsageContext): Pr
 }
 
 async function getPerceptionFromPerplexity(brand: Brand, usage?: AiUsageContext): Promise<Partial<PerceptionData>> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("perplexity perception");
+    return fakePerceptionResult(brand.domain);
+  }
   const client = new Perplexity({
     apiKey: process.env.PERPLEXITY_API_KEY,
     timeout: 120_000,

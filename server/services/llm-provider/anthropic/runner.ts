@@ -4,8 +4,15 @@ import { usageFromAnthropic } from "./usage";
 import { extractInfo, type LLMResult } from "../../../llm-runner";
 import { anthropicWebSearchMeter } from "@shared/ai-billing";
 import { anthropicOutputText } from "./output";
+import { fakeAiSleep, fakeVisibilityText, isFakeAiEnabled, maybeThrowFakeAiError } from "../../fake-ai";
 
 export async function runAnthropic(prompt: string, brandName: string, competitors: string[], companyName?: string | null, systemPrompt?: string | null, usage?: AiUsageContext): Promise<LLMResult> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError("anthropic visibility scan");
+    const text = fakeVisibilityText(prompt, brandName, competitors, "anthropic");
+    return { modelId: "anthropic", ...extractInfo(text, brandName, competitors, companyName) };
+  }
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const response = await executeAiCall(
     usage,

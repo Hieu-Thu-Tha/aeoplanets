@@ -4,6 +4,7 @@ import { executeAiCall } from "./ai-usage";
 import { usageFromGemini } from "./llm-provider/gemini/usage";
 import { isAiUsageCapExceededError } from "./ai-usage/cap";
 import { GEMINI_GROUNDED_PROMPT_METER } from "@shared/ai-billing";
+import { fakeAiSleep, fakeWeaknessReport, isFakeAiEnabled, maybeThrowFakeAiError } from "./fake-ai";
 
 export interface FreshDataBundle {
   visibilityRuns: VisibilityRun[];
@@ -28,6 +29,13 @@ async function refreshCompetitorWeakness(
   brand: any,
   storage: IStorage
 ): Promise<any> {
+  if (isFakeAiEnabled()) {
+    await fakeAiSleep();
+    maybeThrowFakeAiError(`weakness refresh ${competitorName}`);
+    const fake = fakeWeaknessReport(competitorName);
+    await storage.upsertAiCache(brandId, "competitor_weakness", competitorName.toLowerCase().trim(), fake);
+    return fake;
+  }
   const { GoogleGenAI } = await import("@google/genai");
   const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
